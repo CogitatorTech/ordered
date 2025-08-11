@@ -22,21 +22,21 @@ repos:
   - repo: local
     hooks:
       - id: format
-        name: Format the code
+        name: Format Code
         entry: make format
         language: system
         pass_filenames: false
         stages: [ pre-commit ]
 
       - id: lint
-        name: Check code style
+        name: Check Code Style
         entry: make lint
         language: system
         pass_filenames: false
         stages: [ pre-commit ]
 
       - id: test
-        name: Run the tests
+        name: Run Test
         entry: make test
         language: system
         pass_filenames: false

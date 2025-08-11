@@ -28,7 +28,7 @@ pub fn main() !void {
         for (keys.items) |key| {
             allocator.free(key);
         }
-        keys.deinit();
+        keys.deinit(allocator);
     }
 
     std.debug.print("Keys with prefix 'car': ", .{});

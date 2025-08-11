@@ -154,7 +154,7 @@ pub fn Trie(comptime V: type) type {
         }
 
         pub fn keysWithPrefix(self: *const Self, allocator: std.mem.Allocator, prefix: []const u8) !std.ArrayList([]u8) {
-            var results = std.ArrayList([]u8).init(allocator);
+            var results: std.ArrayList([]u8) = .{};
 
             const prefix_node = self.findNode(prefix) orelse return results;
             try self.collectKeys(allocator, prefix_node, &results, prefix);
@@ -165,7 +165,7 @@ pub fn Trie(comptime V: type) type {
         fn collectKeys(self: *const Self, allocator: std.mem.Allocator, node: *const TrieNode, results: *std.ArrayList([]u8), current_key: []const u8) !void {
             if (node.is_end) {
                 const key_copy = try allocator.dupe(u8, current_key);
-                try results.append(key_copy);
+                try results.append(allocator, key_copy);
             }
 
             var iter = node.children.iterator();
@@ -194,8 +194,8 @@ pub fn Trie(comptime V: type) type {
             };
 
             fn init(allocator: std.mem.Allocator, root: *const TrieNode) !Iterator {
-                var stack = std.ArrayList(IteratorFrame).init(allocator);
-                try stack.append(IteratorFrame{
+                var stack: std.ArrayList(IteratorFrame) = .{};
+                try stack.append(allocator, IteratorFrame{
                     .node = root,
                     .child_iter = root.children.iterator(),
                     .visited_self = false,
@@ -204,13 +204,13 @@ pub fn Trie(comptime V: type) type {
                 return Iterator{
                     .stack = stack,
                     .allocator = allocator,
-                    .current_key = std.ArrayList(u8).init(allocator),
+                    .current_key = .{},
                 };
             }
 
             fn deinit(self: *Iterator) void {
-                self.stack.deinit();
-                self.current_key.deinit();
+                self.stack.deinit(self.allocator);
+                self.current_key.deinit(self.allocator);
             }
 
             pub fn next(self: *Iterator) ?struct { key: []const u8, value: V } {
@@ -226,9 +226,9 @@ pub fn Trie(comptime V: type) type {
                         const char = entry.key_ptr.*;
                         const child = entry.value_ptr.*;
 
-                        self.current_key.append(char) catch return null;
+                        self.current_key.append(self.allocator, char) catch return null;
 
-                        self.stack.append(IteratorFrame{
+                        self.stack.append(self.allocator, IteratorFrame{
                             .node = child,
                             .child_iter = child.children.iterator(),
                             .visited_self = false,
@@ -288,7 +288,7 @@ test "Trie: prefix operations" {
         for (keys.items) |key| {
             allocator.free(key);
         }
-        keys.deinit();
+        keys.deinit(allocator);
     }
 
     try std.testing.expectEqual(@as(usize, 3), keys.items.len);

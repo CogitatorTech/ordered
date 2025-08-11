@@ -218,23 +218,25 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
         /// Iterator for in-order traversal
         pub const Iterator = struct {
             stack: std.ArrayList(*Node),
+            allocator: Allocator,
 
             pub fn init(allocator: Allocator, root: ?*Node) Iterator {
                 var it = Iterator{
-                    .stack = std.ArrayList(*Node).init(allocator),
+                    .stack = .{},
+                    .allocator = allocator,
                 };
                 it.pushLeft(root);
                 return it;
             }
 
             pub fn deinit(self: *Iterator) void {
-                self.stack.deinit();
+                self.stack.deinit(self.allocator);
             }
 
             fn pushLeft(self: *Iterator, node: ?*Node) void {
                 var current = node;
                 while (current) |n| {
-                    self.stack.append(n) catch return; // Handle potential allocation failure
+                    self.stack.append(self.allocator, n) catch return; // Handle potential allocation failure
                     current = n.left;
                 }
             }

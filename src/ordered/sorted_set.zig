@@ -16,13 +16,13 @@ pub fn SortedSet(
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
-                .items = std.ArrayList(T).init(allocator),
+                .items = .{},
                 .allocator = allocator,
             };
         }
 
         pub fn deinit(self: *Self) void {
-            self.items.deinit();
+            self.items.deinit(self.allocator);
         }
 
         fn compareFn(key: T, item: T) std.math.Order {
@@ -32,7 +32,7 @@ pub fn SortedSet(
         /// Adds a value to the vector, maintaining sort order.
         pub fn add(self: *Self, value: T) !void {
             const index = std.sort.lowerBound(T, self.items.items, value, compareFn);
-            try self.items.insert(index, value);
+            try self.items.insert(self.allocator, index, value);
         }
 
         /// Removes an element at a given index.

@@ -395,16 +395,18 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         /// Iterator for in-order traversal
         pub const Iterator = struct {
             stack: std.ArrayList(*Node),
+            allocator: Allocator,
 
             pub fn init(allocator: Allocator, root: ?*Node) !Iterator {
                 var it = Iterator{
-                    .stack = std.ArrayList(*Node).init(allocator),
+                    .stack = .{},
+                    .allocator = allocator,
                 };
 
                 // Initialize stack with leftmost path
                 var node = root;
                 while (node) |n| {
-                    try it.stack.append(n);
+                    try it.stack.append(allocator, n);
                     node = n.left;
                 }
 
@@ -412,18 +414,18 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             }
 
             pub fn deinit(self: *Iterator) void {
-                self.stack.deinit();
+                self.stack.deinit(self.allocator);
             }
 
             pub fn next(self: *Iterator) !?*Node {
                 if (self.stack.items.len == 0) return null;
 
-                const node = self.stack.pop();
+                const node: *Node = self.stack.pop().?;
 
                 // Add right subtree to stack
                 var current = node.right;
                 while (current) |n| {
-                    try self.stack.append(n);
+                    try self.stack.append(self.allocator, n);
                     current = n.left;
                 }
 
