@@ -1,6 +1,6 @@
 .{
     .name = .ordered,
-    .version = "0.1.0-alpha.2",
+    .version = "0.1.0-alpha.3",
     .fingerprint = 0xc3121f99b0352e1b, // Changing this has security and trust implications.
     .minimum_zig_version = "0.15.1",
     .paths = .{

@@ -24,25 +24,20 @@ A collection of data structures that keep data in order in pure Zig
 Ordered is a Zig library that provides fast and efficient implementations of various popular data structures including
 B-tree, skip list, trie, and red-black tree for Zig programming language.
 
-### Supported Data Structures
+### Features
 
-Currently supported data structures include:
+- Fast and efficient implementations
 
-- [B-tree](src/ordered/btree_map.zig): A self-balancing search tree where nodes can have many children.
-- [Sorted Set](src/ordered/sorted_set.zig): A data structure that stores a collection of unique elements in a consistently sorted order.
-- [Skip List](src/ordered/skip_list.zig): A probabilistic data structure that uses multiple linked lists to create "express lanes" for fast, tree-like search.
-- [Trie](src/ordered/trie.zig): A tree where paths from the root represent prefixes which makes it extremely fast for tasks like text autocomplete.
-- [Red-black Tree](src/ordered/red_black_tree.zig): A self-balancing binary search tree that uses node colors to guarantee efficient operations.
-- [Cartesian Tree](src/ordered/cartesian_tree.zig): A binary tree that uniquely combines a binary search tree property for its keys with a heap** property for its values.
+### Data Structures
 
-| # | Data Structure | Build Complexity | Memory Complexity | Search Complexity    |  
-|---|----------------|------------------|-------------------|----------------------|
-| 1 | B-tree         | $O(\log n)$      | $O(n)$            | $O(\log n)$          |  
-| 2 | Cartesian tree | $O(\log n)$\*    | $O(n)$            | $O(\log n)$\* |  
-| 3 | Red-black tree | $O(\log n)$      | $O(n)$            | $O(\log n)$          |  
-| 4 | Skip list      | $O(\log n)$\*    | $O(n)$            | $O(\log n)$\* |  
-| 5 | Sorted set     | $O(n)$           | $O(n)$            | $O(\log n)$          |
-| 6 | Trie           | $O(m)$           | $O(n \cdot m)$    | $O(m)$               |  
+| Data Structure                                                         | Build Complexity | Memory Complexity | Search Complexity |  
+|------------------------------------------------------------------------|------------------|-------------------|-------------------|
+| [B-tree](https://en.wikipedia.org/wiki/B-tree)                         | $O(\log n)$      | $O(n)$            | $O(\log n)$       |  
+| [Cartesian tree](https://en.wikipedia.org/wiki/Cartesian_tree)         | $O(\log n)$\*    | $O(n)$            | $O(\log n)$\*     |  
+| [Red-black tree](https://en.wikipedia.org/wiki/Red%E2%80%93black_tree) | $O(\log n)$      | $O(n)$            | $O(\log n)$       |  
+| [Skip list](https://en.wikipedia.org/wiki/Skip_list)                   | $O(\log n)$\*    | $O(n)$            | $O(\log n)$\*     |  
+| Sorted set                                                             | $O(n)$           | $O(n)$            | $O(\log n)$       |
+| [Trie](https://en.wikipedia.org/wiki/Trie)                             | $O(m)$           | $O(n \cdot m)$    | $O(m)$            |  
 
 - $n$: number of stored elements
 - $m$: maximum length of a key
