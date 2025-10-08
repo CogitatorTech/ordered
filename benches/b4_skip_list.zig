@@ -100,4 +100,3 @@ fn benchmarkDelete(allocator: std.mem.Allocator, size: usize) !void {
         ns_per_op,
     });
 }
-

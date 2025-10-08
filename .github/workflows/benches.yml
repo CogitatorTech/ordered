@@ -1,4 +1,4 @@
-name: Run Tests
+name: Run Benchmarks
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  benchmarks:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,5 +32,5 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make
 
-      - name: Run the Tests
-        run: make test
+      - name: Run the Benchmarks
+        run: make bench

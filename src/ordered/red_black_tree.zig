@@ -453,3 +453,198 @@ pub fn DefaultContext(comptime T: type) type {
 pub fn RedBlackTreeManaged(comptime T: type) type {
     return RedBlackTree(T, DefaultContext(T));
 }
+
+test "RedBlackTree: basic operations" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(10);
+    try tree.insert(20);
+    try tree.insert(5);
+
+    try std.testing.expectEqual(@as(usize, 3), tree.count());
+    try std.testing.expect(tree.contains(10));
+    try std.testing.expect(tree.contains(5));
+    try std.testing.expect(!tree.contains(99));
+}
+
+test "RedBlackTree: empty tree operations" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try std.testing.expect(!tree.contains(42));
+    try std.testing.expectEqual(@as(usize, 0), tree.count());
+    try std.testing.expect(!tree.remove(42));
+}
+
+test "RedBlackTree: single element" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(42);
+    try std.testing.expectEqual(@as(usize, 1), tree.count());
+    try std.testing.expect(tree.contains(42));
+    try std.testing.expect(tree.root.?.color == .black);
+
+    const removed = tree.remove(42);
+    try std.testing.expect(removed);
+    try std.testing.expectEqual(@as(usize, 0), tree.count());
+    try std.testing.expect(tree.root == null);
+}
+
+test "RedBlackTree: duplicate insertions" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(10);
+    try tree.insert(10);
+    try tree.insert(10);
+
+    // Duplicates update existing nodes
+    try std.testing.expectEqual(@as(usize, 1), tree.count());
+}
+
+test "RedBlackTree: sequential insertion" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    var i: i32 = 0;
+    while (i < 50) : (i += 1) {
+        try tree.insert(i);
+    }
+
+    try std.testing.expectEqual(@as(usize, 50), tree.count());
+    try std.testing.expect(tree.root.?.color == .black);
+
+    i = 0;
+    while (i < 50) : (i += 1) {
+        try std.testing.expect(tree.contains(i));
+    }
+}
+
+test "RedBlackTree: reverse insertion" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    var i: i32 = 50;
+    while (i > 0) : (i -= 1) {
+        try tree.insert(i);
+    }
+
+    try std.testing.expectEqual(@as(usize, 50), tree.count());
+    try std.testing.expect(tree.root.?.color == .black);
+}
+
+test "RedBlackTree: remove from middle" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(10);
+    try tree.insert(5);
+    try tree.insert(15);
+    try tree.insert(3);
+    try tree.insert(7);
+
+    const removed = tree.remove(5);
+    try std.testing.expect(removed);
+    try std.testing.expectEqual(@as(usize, 4), tree.count());
+    try std.testing.expect(!tree.contains(5));
+    try std.testing.expect(tree.contains(3));
+    try std.testing.expect(tree.contains(7));
+}
+
+test "RedBlackTree: remove root" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(10);
+    try tree.insert(5);
+    try tree.insert(15);
+
+    const removed = tree.remove(10);
+    try std.testing.expect(removed);
+    try std.testing.expectEqual(@as(usize, 2), tree.count());
+    try std.testing.expect(tree.root.?.color == .black);
+}
+
+test "RedBlackTree: minimum and maximum" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(10);
+    try tree.insert(5);
+    try tree.insert(15);
+    try tree.insert(3);
+    try tree.insert(20);
+
+    const min = tree.minimum(null);
+    const max = tree.maximum(null);
+
+    try std.testing.expect(min != null);
+    try std.testing.expect(max != null);
+    try std.testing.expectEqual(@as(i32, 3), min.?.data);
+    try std.testing.expectEqual(@as(i32, 20), max.?.data);
+}
+
+test "RedBlackTree: iterator empty tree" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    var iter = try tree.iterator();
+    defer iter.deinit();
+
+    const node = try iter.next();
+    try std.testing.expect(node == null);
+}
+
+test "RedBlackTree: clear" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(1);
+    try tree.insert(2);
+    try tree.insert(3);
+
+    tree.clear();
+    try std.testing.expectEqual(@as(usize, 0), tree.count());
+    try std.testing.expect(tree.root == null);
+}
+
+test "RedBlackTree: negative numbers" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(-10);
+    try tree.insert(-5);
+    try tree.insert(0);
+    try tree.insert(5);
+
+    try std.testing.expectEqual(@as(usize, 4), tree.count());
+    try std.testing.expect(tree.contains(-10));
+    try std.testing.expect(tree.contains(0));
+}
+
+test "RedBlackTree: find returns correct node" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    defer tree.deinit();
+
+    try tree.insert(10);
+    try tree.insert(20);
+
+    const node = tree.find(10);
+    try std.testing.expect(node != null);
+    try std.testing.expectEqual(@as(i32, 10), node.?.data);
+}

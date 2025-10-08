@@ -1,17 +1,13 @@
 name: Run Linter Checks
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
-
   pull_request:
     branches:
       - main
-
-  workflow_dispatch:
 
 permissions:
   contents: read

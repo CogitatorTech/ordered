@@ -135,4 +135,3 @@ fn benchmarkIterator(allocator: std.mem.Allocator, size: usize) !void {
         count,
     });
 }
-

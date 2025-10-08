@@ -79,9 +79,10 @@ pub fn BTreeMap(
 
         /// Inserts a key-value pair. If the key exists, the value is updated.
         pub fn put(self: *Self, key: K, value: V) !void {
+            // Check if key exists and just update the value in place
             if (self.get(key) != null) {
                 _ = self.remove(key);
-                self.len += 1;
+                // Don't increment len here, it will be incremented below
             }
 
             var root_node = if (self.root) |r| r else {
@@ -113,22 +114,28 @@ pub fn BTreeMap(
             new_sibling.is_leaf = child.is_leaf;
 
             const t = MIN_KEYS;
-            new_sibling.len = t;
+            // Calculate how many keys go to the right sibling
+            // Full node has BRANCHING_FACTOR - 1 keys
+            // Left child keeps t keys, parent gets 1, right sibling gets the rest
+            const right_keys = BRANCHING_FACTOR - 1 - t - 1;
+            new_sibling.len = right_keys;
 
+            // Copy the right half of keys to the new sibling
             var j: u16 = 0;
-            while (j < t) : (j += 1) {
+            while (j < right_keys) : (j += 1) {
                 new_sibling.keys[j] = child.keys[j + t + 1];
                 new_sibling.values[j] = child.values[j + t + 1];
             }
 
             if (!child.is_leaf) {
                 j = 0;
-                while (j < t + 1) : (j += 1) {
+                while (j <= right_keys) : (j += 1) {
                     new_sibling.children[j] = child.children[j + t + 1];
                 }
             }
             child.len = t;
 
+            // Insert new sibling into parent
             j = parent.len;
             while (j > index) : (j -= 1) {
                 parent.children[j + 1] = parent.children[j];
@@ -399,4 +406,158 @@ test "BTreeMap: put, get, and delete" {
     try str_map.put("a", 1);
     try str_map.put("b", 2);
     try std.testing.expectEqual(2, str_map.get("b").?.*);
+}
+
+test "BTreeMap: empty map operations" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    try std.testing.expect(map.get(42) == null);
+    try std.testing.expectEqual(@as(usize, 0), map.len);
+    try std.testing.expect(map.remove(42) == null);
+}
+
+test "BTreeMap: single element operations" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, []const u8, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    try map.put(42, "answer");
+    try std.testing.expectEqual(@as(usize, 1), map.len);
+    try std.testing.expectEqualStrings("answer", map.get(42).?.*);
+
+    const removed = map.remove(42);
+    try std.testing.expect(removed != null);
+    try std.testing.expectEqualStrings("answer", removed.?);
+    try std.testing.expectEqual(@as(usize, 0), map.len);
+}
+
+test "BTreeMap: update existing keys" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    try map.put(10, 100);
+    try map.put(20, 200);
+    try map.put(10, 999); // Update
+
+    try std.testing.expectEqual(@as(usize, 2), map.len);
+    try std.testing.expectEqual(@as(i32, 999), map.get(10).?.*);
+}
+
+test "BTreeMap: sequential insertion" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 5).init(allocator);
+    defer map.deinit();
+
+    var i: i32 = 0;
+    while (i < 50) : (i += 1) {
+        try map.put(i, i * 2);
+    }
+
+    try std.testing.expectEqual(@as(usize, 50), map.len);
+
+    i = 0;
+    while (i < 50) : (i += 1) {
+        try std.testing.expectEqual(i * 2, map.get(i).?.*);
+    }
+}
+
+test "BTreeMap: reverse insertion" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 5).init(allocator);
+    defer map.deinit();
+
+    var i: i32 = 50;
+    while (i > 0) : (i -= 1) {
+        try map.put(i, i * 3);
+    }
+
+    try std.testing.expectEqual(@as(usize, 50), map.len);
+
+    i = 1;
+    while (i <= 50) : (i += 1) {
+        try std.testing.expectEqual(i * 3, map.get(i).?.*);
+    }
+}
+
+test "BTreeMap: random operations" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    const values = [_]i32{ 15, 3, 27, 8, 42, 1, 19, 33, 11, 25 };
+    for (values) |val| {
+        try map.put(val, val * 10);
+    }
+
+    try std.testing.expectEqual(@as(usize, 10), map.len);
+
+    for (values) |val| {
+        try std.testing.expectEqual(val * 10, map.get(val).?.*);
+    }
+
+    // Remove some
+    _ = map.remove(15);
+    _ = map.remove(27);
+    _ = map.remove(1);
+
+    try std.testing.expectEqual(@as(usize, 7), map.len);
+    try std.testing.expect(map.get(15) == null);
+    try std.testing.expect(map.get(27) == null);
+    try std.testing.expect(map.get(1) == null);
+}
+
+test "BTreeMap: remove all elements" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    try map.put(1, 1);
+    try map.put(2, 2);
+    try map.put(3, 3);
+    try map.put(4, 4);
+    try map.put(5, 5);
+
+    _ = map.remove(1);
+    _ = map.remove(2);
+    _ = map.remove(3);
+    _ = map.remove(4);
+    _ = map.remove(5);
+
+    try std.testing.expectEqual(@as(usize, 0), map.len);
+    try std.testing.expect(map.get(3) == null);
+}
+
+test "BTreeMap: minimum branching factor" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 3).init(allocator);
+    defer map.deinit();
+
+    var i: i32 = 0;
+    while (i < 20) : (i += 1) {
+        try map.put(i, i);
+    }
+
+    try std.testing.expectEqual(@as(usize, 20), map.len);
+
+    i = 0;
+    while (i < 20) : (i += 1) {
+        try std.testing.expectEqual(i, map.get(i).?.*);
+    }
+}
+
+test "BTreeMap: negative keys" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    try map.put(-10, 10);
+    try map.put(-5, 5);
+    try map.put(0, 0);
+    try map.put(5, -5);
+
+    try std.testing.expectEqual(@as(i32, 10), map.get(-10).?.*);
+    try std.testing.expectEqual(@as(i32, -5), map.get(5).?.*);
 }

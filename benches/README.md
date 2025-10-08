@@ -1,8 +1,8 @@
-# Benchmarks
+## Benchmarks
 
-This directory contains performance benchmarks for all data structures in the `ordered` library.
+This directory contains benchmarks for the data structures in the `ordered` library.
 
-## Running Benchmarks
+### Running Benchmarks
 
 Each benchmark can be run using the following command pattern:
 
@@ -10,7 +10,7 @@ Each benchmark can be run using the following command pattern:
 zig build bench-<benchmark_name>
 ```
 
-### Available Benchmarks
+#### Available Benchmarks
 
 - **BTreeMap**: `zig build bench-btree_map_bench`
 - **SortedSet**: `zig build bench-sorted_set_bench`
@@ -19,53 +19,53 @@ zig build bench-<benchmark_name>
 - **Trie**: `zig build bench-trie_bench`
 - **CartesianTree**: `zig build bench-cartesian_tree_bench`
 
-## What Each Benchmark Tests
+### What Each Benchmark Tests
 
-### BTreeMap Benchmark
+#### BTreeMap Benchmark
 - **Insert**: Sequential insertion of integers
 - **Lookup**: Finding all inserted keys
 - **Delete**: Removing all keys
 
-### SortedSet Benchmark
-- **Add**: Adding elements while maintaining sorted order
+#### SortedSet Benchmark
+- **Add**: Adding elements while maintaining a sorted order
 - **Contains**: Checking if elements exist
 - **Remove**: Removing elements from the set
 
-### RedBlackTree Benchmark
+#### RedBlackTree Benchmark
 - **Insert**: Inserting nodes with self-balancing
 - **Find**: Searching for nodes
 - **Remove**: Deleting nodes while maintaining balance
 - **Iterator**: In-order traversal performance
 
-### SkipList Benchmark
+#### SkipList Benchmark
 - **Put**: Inserting key-value pairs with probabilistic levels
 - **Get**: Retrieving values by key
 - **Delete**: Removing key-value pairs
 
-### Trie Benchmark
+#### Trie Benchmark
 - **Put**: Inserting strings with associated values
 - **Get**: Retrieving values by string key
 - **Contains**: Checking if strings exist
 - **Prefix Search**: Finding all keys with a common prefix
 
-### CartesianTree Benchmark
+#### CartesianTree Benchmark
 - **Put**: Inserting key-value pairs with random priorities
 - **Get**: Retrieving values by key
 - **Remove**: Deleting nodes
 - **Iterator**: In-order traversal performance
 
-## Benchmark Sizes
+### Benchmark Sizes
 
 Each benchmark tests with multiple dataset sizes:
 - Small: 1,000 items
 - Medium: 10,000 items
 - Large: 50,000 - 100,000 items (varies by data structure)
 
-## Build Configuration
+### Build Configuration
 
 Benchmarks are compiled with `ReleaseFast` optimization mode for accurate performance measurements.
 
-## Example Output
+### Example Output
 
 ```
 === BTreeMap Benchmark ===
@@ -79,9 +79,9 @@ Lookup 10000 items: 2.10 ms (210 ns/op, found: 10000)
 Delete 10000 items: 4.15 ms (415 ns/op)
 ```
 
-## Notes
+### Notes
 
 - All benchmarks use a simple integer or string key type for consistency
 - Times are reported in both total milliseconds and nanoseconds per operation
-- Memory allocations use `GeneralPurposeAllocator` for production-like behavior
-
+- Memory allocations use `GeneralPurposeAllocator` for simulating a more realistic memory usage
+- Results may vary based on a hardware and system load

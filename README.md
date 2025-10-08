@@ -7,32 +7,33 @@
 <h2>Ordered</h2>
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/tests.yml?label=tests&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/tests.yml)
-[![CodeFactor](https://img.shields.io/codefactor/grade/github/CogitatorTech/ordered?label=code%20quality&style=flat&labelColor=282c34&logo=codefactor)](https://www.codefactor.io/repository/github/CogitatorTech/ordered)
-[![Zig Version](https://img.shields.io/badge/Zig-0.15.1-orange?logo=zig&labelColor=282c34)](https://ziglang.org/download/)
+[![Benchmarks](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/benches.yml?label=benches&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/benches.yml)
+[![CodeFactor](https://img.shields.io/codefactor/grade/github/CogitatorTech/ordered?label=quality&style=flat&labelColor=282c34&logo=codefactor)](https://www.codefactor.io/repository/github/CogitatorTech/ordered)
 [![Docs](https://img.shields.io/badge/docs-view-blue?style=flat&labelColor=282c34&logo=read-the-docs)](https://CogitatorTech.github.io/ordered/)
 [![Examples](https://img.shields.io/badge/examples-view-green?style=flat&labelColor=282c34&logo=zig)](https://github.com/CogitatorTech/ordered/tree/main/examples)
+[![Zig Version](https://img.shields.io/badge/Zig-0.15.1-orange?logo=zig&labelColor=282c34)](https://ziglang.org/download/)
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/CogitatorTech/ordered/blob/main/LICENSE)
 
-A collection of data structures that keep data in order
+A collection of data structures that keep data in order in pure Zig
 
 </div>
 
 ---
 
-Ordered library includes fast and efficient implementations of popular data structures including
+Ordered is a Zig library that provides fast and efficient implementations of various popular data structures including
 B-tree, skip list, trie, and red-black tree for Zig programming language.
 
 ### Supported Data Structures
 
 Currently supported data structures include:
 
-- [B-tree](src/ordered/btree_map.zig): a balanced n-array tree that maintains the order of keys.
-- [Sorted set](src/ordered/sorted_set.zig): a set with ordered elements based on keys.
-- [Skip list](src/ordered/skip_list.zig): a probabilistic data structure that maintains sorted order using multiple linked lists.
-- [Trie](src/ordered/trie.zig): a prefix tree that supports efficient retrieval of keys with common prefixes.
-- [Red-black tree](src/ordered/red_black_tree.zig): A self-balancing binary search tree that maintains the order of keys
-- [Cartesian tree](src/ordered/cartesian_tree.zig): A binary tree that maintains both a binary search tree property on keys and a heap property on priorities.
+- [B-tree](src/ordered/btree_map.zig): A self-balancing search tree where nodes can have many children.
+- [Sorted Set](src/ordered/sorted_set.zig): A data structure that stores a collection of unique elements in a consistently sorted order.
+- [Skip List](src/ordered/skip_list.zig): A probabilistic data structure that uses multiple linked lists to create "express lanes" for fast, tree-like search.
+- [Trie](src/ordered/trie.zig): A tree where paths from the root represent prefixes which makes it extremely fast for tasks like text autocomplete.
+- [Red-black Tree](src/ordered/red_black_tree.zig): A self-balancing binary search tree that uses node colors to guarantee efficient operations.
+- [Cartesian Tree](src/ordered/cartesian_tree.zig): A binary tree that uniquely combines a binary search tree property for its keys with a heap** property for its values.
 
 | # | Data Structure | Build Complexity | Memory Complexity | Search Complexity    |  
 |---|----------------|------------------|-------------------|----------------------|
