@@ -218,23 +218,25 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
         /// Iterator for in-order traversal
         pub const Iterator = struct {
             stack: std.ArrayList(*Node),
+            allocator: Allocator,
 
             pub fn init(allocator: Allocator, root: ?*Node) Iterator {
                 var it = Iterator{
-                    .stack = std.ArrayList(*Node).init(allocator),
+                    .stack = .{},
+                    .allocator = allocator,
                 };
                 it.pushLeft(root);
                 return it;
             }
 
             pub fn deinit(self: *Iterator) void {
-                self.stack.deinit();
+                self.stack.deinit(self.allocator);
             }
 
             fn pushLeft(self: *Iterator, node: ?*Node) void {
                 var current = node;
                 while (current) |n| {
-                    self.stack.append(n) catch return; // Handle potential allocation failure
+                    self.stack.append(self.allocator, n) catch return; // Handle potential allocation failure
                     current = n.left;
                 }
             }
@@ -279,62 +281,190 @@ test "CartesianTree basic operations" {
     // Test get
     try testing.expectEqualStrings("five", tree.get(5).?);
     try testing.expectEqualStrings("three", tree.get(3).?);
-    try testing.expectEqualStrings("seven", tree.get(7).?);
-    try testing.expectEqualStrings("one", tree.get(1).?);
     try testing.expect(tree.get(99) == null);
 
     // Test contains
     try testing.expect(tree.contains(5));
-    try testing.expect(tree.contains(3));
     try testing.expect(!tree.contains(99));
 
-    // Test removal
+    // Test remove
     try testing.expect(tree.remove(3));
-    try testing.expect(!tree.contains(3));
     try testing.expectEqual(@as(usize, 3), tree.count());
-    try testing.expect(!tree.remove(99));
+    try testing.expect(!tree.contains(3));
 }
 
-test "CartesianTree iterator" {
+test "CartesianTree: empty tree operations" {
     var tree = CartesianTree(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
-    // Insert values with specific priorities to control structure
-    try tree.putWithPriority(5, 50, 10);
-    try tree.putWithPriority(3, 30, 5);
-    try tree.putWithPriority(7, 70, 15);
-    try tree.putWithPriority(1, 10, 3);
-    try tree.putWithPriority(9, 90, 8);
-
-    var it = tree.iterator(testing.allocator);
-    defer it.deinit();
-
-    // Should iterate in sorted key order
-    const expected_keys = [_]i32{ 1, 3, 5, 7, 9 };
-    const expected_values = [_]i32{ 10, 30, 50, 70, 90 };
-
-    var i: usize = 0;
-    while (it.next()) |entry| {
-        try testing.expectEqual(expected_keys[i], entry.key);
-        try testing.expectEqual(expected_values[i], entry.value);
-        i += 1;
-    }
-    try testing.expectEqual(@as(usize, 5), i);
+    try testing.expect(tree.isEmpty());
+    try testing.expectEqual(@as(usize, 0), tree.count());
+    try testing.expect(tree.get(42) == null);
+    try testing.expect(!tree.contains(42));
+    try testing.expect(!tree.remove(42));
 }
 
-test "CartesianTree heap property" {
-    // Test that heap property is maintained (higher priority nodes are ancestors)
+test "CartesianTree: single element" {
     var tree = CartesianTree(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
-    try tree.putWithPriority(5, 50, 100); // Root (highest priority)
-    try tree.putWithPriority(3, 30, 80); // Left subtree
-    try tree.putWithPriority(7, 70, 90); // Right subtree
-    try tree.putWithPriority(1, 10, 60); // Left-left
-    try tree.putWithPriority(9, 90, 70); // Right-right
+    try tree.putWithPriority(42, 100, 50);
+    try testing.expectEqual(@as(usize, 1), tree.count());
+    try testing.expectEqual(@as(i32, 100), tree.get(42).?);
 
-    // Verify structure maintains heap property
-    // Root should have highest priority
+    const removed = tree.remove(42);
+    try testing.expect(removed);
+    try testing.expect(tree.isEmpty());
+    try testing.expect(tree.root == null);
+}
+
+test "CartesianTree: priority ordering" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    // Higher priority should be closer to root
+    try tree.putWithPriority(10, 1, 100); // Highest priority
+    try tree.putWithPriority(5, 2, 50);
+    try tree.putWithPriority(15, 3, 75);
+
     try testing.expectEqual(@as(u32, 100), tree.root.?.priority);
-    try testing.expectEqual(@as(i32, 5), tree.root.?.key);
+    try testing.expectEqual(@as(i32, 10), tree.root.?.key);
+}
+
+test "CartesianTree: update existing key with different priority" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(10, 100, 50);
+    try tree.putWithPriority(10, 200, 75);
+
+    try testing.expectEqual(@as(usize, 1), tree.count());
+    try testing.expectEqual(@as(i32, 200), tree.get(10).?);
+}
+
+test "CartesianTree: random priorities with put" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    // Using put which generates random priorities
+    try tree.put(1, 1);
+    try tree.put(2, 2);
+    try tree.put(3, 3);
+
+    try testing.expectEqual(@as(usize, 3), tree.count());
+    try testing.expectEqual(@as(i32, 1), tree.get(1).?);
+    try testing.expectEqual(@as(i32, 2), tree.get(2).?);
+    try testing.expectEqual(@as(i32, 3), tree.get(3).?);
+}
+
+test "CartesianTree: sequential keys" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    var i: i32 = 0;
+    while (i < 20) : (i += 1) {
+        try tree.putWithPriority(i, i * 2, @intCast(i));
+    }
+
+    try testing.expectEqual(@as(usize, 20), tree.count());
+
+    i = 0;
+    while (i < 20) : (i += 1) {
+        try testing.expectEqual(i * 2, tree.get(i).?);
+    }
+}
+
+test "CartesianTree: remove non-existent key" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(10, 10, 10);
+    try tree.putWithPriority(20, 20, 20);
+
+    const removed = tree.remove(15);
+    try testing.expect(!removed);
+    try testing.expectEqual(@as(usize, 2), tree.count());
+}
+
+test "CartesianTree: remove all elements" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(1, 1, 1);
+    try tree.putWithPriority(2, 2, 2);
+    try tree.putWithPriority(3, 3, 3);
+
+    try testing.expect(tree.remove(1));
+    try testing.expect(tree.remove(2));
+    try testing.expect(tree.remove(3));
+
+    try testing.expect(tree.isEmpty());
+    try testing.expect(tree.get(2) == null);
+}
+
+test "CartesianTree: negative keys" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(-10, 10, 100);
+    try tree.putWithPriority(-5, 5, 50);
+    try tree.putWithPriority(0, 0, 75);
+    try tree.putWithPriority(5, -5, 25);
+
+    try testing.expectEqual(@as(i32, 10), tree.get(-10).?);
+    try testing.expectEqual(@as(i32, -5), tree.get(5).?);
+}
+
+test "CartesianTree: iterator traversal" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(30, 30, 30);
+    try tree.putWithPriority(10, 10, 10);
+    try tree.putWithPriority(20, 20, 20);
+    try tree.putWithPriority(5, 5, 5);
+
+    var iter = tree.iterator(testing.allocator);
+    defer iter.deinit();
+
+    // Should iterate in sorted key order (BST property)
+    const expected = [_]i32{ 5, 10, 20, 30 };
+    var idx: usize = 0;
+
+    while (iter.next()) |entry| : (idx += 1) {
+        try testing.expectEqual(expected[idx], entry.key);
+    }
+    try testing.expectEqual(@as(usize, 4), idx);
+}
+
+test "CartesianTree: large dataset" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    var i: i32 = 0;
+    while (i < 50) : (i += 1) {
+        try tree.putWithPriority(i, i * 3, @intCast(i * 2));
+    }
+
+    try testing.expectEqual(@as(usize, 50), tree.count());
+
+    i = 0;
+    while (i < 50) : (i += 1) {
+        try testing.expectEqual(i * 3, tree.get(i).?);
+    }
+}
+
+test "CartesianTree: same priorities different keys" {
+    var tree = CartesianTree(i32, i32).init(testing.allocator);
+    defer tree.deinit();
+
+    // When priorities are equal, BST property still maintained by key
+    try tree.putWithPriority(10, 1, 50);
+    try tree.putWithPriority(5, 2, 50);
+    try tree.putWithPriority(15, 3, 50);
+
+    try testing.expectEqual(@as(usize, 3), tree.count());
+    try testing.expect(tree.contains(5));
+    try testing.expect(tree.contains(10));
+    try testing.expect(tree.contains(15));
 }

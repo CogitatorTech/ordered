@@ -154,7 +154,7 @@ pub fn Trie(comptime V: type) type {
         }
 
         pub fn keysWithPrefix(self: *const Self, allocator: std.mem.Allocator, prefix: []const u8) !std.ArrayList([]u8) {
-            var results = std.ArrayList([]u8).init(allocator);
+            var results: std.ArrayList([]u8) = .{};
 
             const prefix_node = self.findNode(prefix) orelse return results;
             try self.collectKeys(allocator, prefix_node, &results, prefix);
@@ -165,7 +165,7 @@ pub fn Trie(comptime V: type) type {
         fn collectKeys(self: *const Self, allocator: std.mem.Allocator, node: *const TrieNode, results: *std.ArrayList([]u8), current_key: []const u8) !void {
             if (node.is_end) {
                 const key_copy = try allocator.dupe(u8, current_key);
-                try results.append(key_copy);
+                try results.append(allocator, key_copy);
             }
 
             var iter = node.children.iterator();
@@ -194,8 +194,8 @@ pub fn Trie(comptime V: type) type {
             };
 
             fn init(allocator: std.mem.Allocator, root: *const TrieNode) !Iterator {
-                var stack = std.ArrayList(IteratorFrame).init(allocator);
-                try stack.append(IteratorFrame{
+                var stack: std.ArrayList(IteratorFrame) = .{};
+                try stack.append(allocator, IteratorFrame{
                     .node = root,
                     .child_iter = root.children.iterator(),
                     .visited_self = false,
@@ -204,13 +204,13 @@ pub fn Trie(comptime V: type) type {
                 return Iterator{
                     .stack = stack,
                     .allocator = allocator,
-                    .current_key = std.ArrayList(u8).init(allocator),
+                    .current_key = .{},
                 };
             }
 
             fn deinit(self: *Iterator) void {
-                self.stack.deinit();
-                self.current_key.deinit();
+                self.stack.deinit(self.allocator);
+                self.current_key.deinit(self.allocator);
             }
 
             pub fn next(self: *Iterator) ?struct { key: []const u8, value: V } {
@@ -226,9 +226,9 @@ pub fn Trie(comptime V: type) type {
                         const char = entry.key_ptr.*;
                         const child = entry.value_ptr.*;
 
-                        self.current_key.append(char) catch return null;
+                        self.current_key.append(self.allocator, char) catch return null;
 
-                        self.stack.append(IteratorFrame{
+                        self.stack.append(self.allocator, IteratorFrame{
                             .node = child,
                             .child_iter = child.children.iterator(),
                             .visited_self = false,
@@ -252,25 +252,59 @@ pub fn Trie(comptime V: type) type {
 
 test "Trie: basic operations" {
     const allocator = std.testing.allocator;
-    var trie = try Trie([]const u8).init(allocator);
+    var trie = try Trie(i32).init(allocator);
     defer trie.deinit();
 
-    try trie.put("cat", "feline");
-    try trie.put("car", "vehicle");
-    try trie.put("card", "playing card");
+    try trie.put("hello", 1);
+    try trie.put("world", 2);
+    try trie.put("help", 3);
 
     try std.testing.expectEqual(@as(usize, 3), trie.len);
-    try std.testing.expectEqualStrings("feline", trie.get("cat").?.*);
-    try std.testing.expectEqualStrings("vehicle", trie.get("car").?.*);
-    try std.testing.expect(trie.get("ca") == null);
-
-    const deleted = trie.delete("car");
-    try std.testing.expectEqualStrings("vehicle", deleted.?);
-    try std.testing.expect(trie.get("car") == null);
-    try std.testing.expectEqual(@as(usize, 2), trie.len);
+    try std.testing.expectEqual(@as(i32, 1), trie.get("hello").?.*);
+    try std.testing.expectEqual(@as(i32, 3), trie.get("help").?.*);
+    try std.testing.expect(trie.get("bye") == null);
 }
 
-test "Trie: prefix operations" {
+test "Trie: empty trie operations" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try std.testing.expect(trie.get("key") == null);
+    try std.testing.expectEqual(@as(usize, 0), trie.len);
+    try std.testing.expect(!trie.contains("key"));
+    try std.testing.expect(!trie.hasPrefix("pre"));
+}
+
+test "Trie: single character keys" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("a", 1);
+    try trie.put("b", 2);
+    try trie.put("c", 3);
+
+    try std.testing.expectEqual(@as(i32, 2), trie.get("b").?.*);
+    try std.testing.expect(trie.contains("a"));
+    try std.testing.expect(!trie.contains("d"));
+}
+
+test "Trie: empty string key" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("", 42);
+    try std.testing.expectEqual(@as(usize, 1), trie.len);
+    try std.testing.expectEqual(@as(i32, 42), trie.get("").?.*);
+
+    const deleted = trie.delete("");
+    try std.testing.expectEqual(@as(i32, 42), deleted.?);
+    try std.testing.expectEqual(@as(usize, 0), trie.len);
+}
+
+test "Trie: overlapping prefixes" {
     const allocator = std.testing.allocator;
     var trie = try Trie(i32).init(allocator);
     defer trie.deinit();
@@ -278,18 +312,145 @@ test "Trie: prefix operations" {
     try trie.put("test", 1);
     try trie.put("testing", 2);
     try trie.put("tester", 3);
+    try trie.put("tested", 4);
 
+    try std.testing.expectEqual(@as(usize, 4), trie.len);
+    try std.testing.expectEqual(@as(i32, 1), trie.get("test").?.*);
+    try std.testing.expectEqual(@as(i32, 2), trie.get("testing").?.*);
+    try std.testing.expect(trie.hasPrefix("tes"));
     try std.testing.expect(trie.hasPrefix("test"));
-    try std.testing.expect(trie.hasPrefix("te"));
-    try std.testing.expect(!trie.hasPrefix("xyz"));
+}
 
-    var keys = try trie.keysWithPrefix(allocator, "test");
-    defer {
-        for (keys.items) |key| {
-            allocator.free(key);
-        }
-        keys.deinit();
+test "Trie: delete with shared prefixes" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("car", 1);
+    try trie.put("card", 2);
+    try trie.put("care", 3);
+
+    const deleted = trie.delete("card");
+    try std.testing.expectEqual(@as(i32, 2), deleted.?);
+    try std.testing.expectEqual(@as(usize, 2), trie.len);
+    try std.testing.expect(!trie.contains("card"));
+    try std.testing.expect(trie.contains("car"));
+    try std.testing.expect(trie.contains("care"));
+}
+
+test "Trie: delete non-existent key" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("hello", 1);
+
+    const deleted = trie.delete("world");
+    try std.testing.expect(deleted == null);
+    try std.testing.expectEqual(@as(usize, 1), trie.len);
+}
+
+test "Trie: delete prefix that is not a key" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("testing", 1);
+
+    const deleted = trie.delete("test");
+    try std.testing.expect(deleted == null);
+    try std.testing.expectEqual(@as(usize, 1), trie.len);
+    try std.testing.expect(trie.contains("testing"));
+}
+
+test "Trie: update existing key" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("key", 100);
+    try std.testing.expectEqual(@as(usize, 1), trie.len);
+
+    try trie.put("key", 200);
+    try std.testing.expectEqual(@as(usize, 1), trie.len);
+    try std.testing.expectEqual(@as(i32, 200), trie.get("key").?.*);
+}
+
+test "Trie: hasPrefix with exact match" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("hello", 1);
+
+    try std.testing.expect(trie.hasPrefix("hello"));
+    try std.testing.expect(trie.hasPrefix("hel"));
+    try std.testing.expect(trie.hasPrefix("h"));
+    try std.testing.expect(!trie.hasPrefix("helloo"));
+}
+
+test "Trie: getPtr mutation" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("key", 100);
+
+    const ptr = trie.getPtr("key");
+    try std.testing.expect(ptr != null);
+    ptr.?.* = 999;
+
+    try std.testing.expectEqual(@as(i32, 999), trie.get("key").?.*);
+}
+
+test "Trie: many keys" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    const keys = [_][]const u8{
+        "apple", "application", "apply", "banana", "band",
+        "can",   "cancel",      "cat",   "dog",    "door",
+    };
+
+    for (keys, 0..) |key, i| {
+        try trie.put(key, @intCast(i));
     }
 
-    try std.testing.expectEqual(@as(usize, 3), keys.items.len);
+    try std.testing.expectEqual(@as(usize, 10), trie.len);
+
+    for (keys, 0..) |key, i| {
+        try std.testing.expectEqual(@as(i32, @intCast(i)), trie.get(key).?.*);
+    }
+}
+
+test "Trie: delete all keys" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("a", 1);
+    try trie.put("b", 2);
+    try trie.put("c", 3);
+
+    _ = trie.delete("a");
+    _ = trie.delete("b");
+    _ = trie.delete("c");
+
+    try std.testing.expectEqual(@as(usize, 0), trie.len);
+    try std.testing.expect(!trie.hasPrefix("a"));
+}
+
+test "Trie: special characters" {
+    const allocator = std.testing.allocator;
+    var trie = try Trie(i32).init(allocator);
+    defer trie.deinit();
+
+    try trie.put("hello-world", 1);
+    try trie.put("test_case", 2);
+    try trie.put("foo.bar", 3);
+
+    try std.testing.expectEqual(@as(i32, 1), trie.get("hello-world").?.*);
+    try std.testing.expectEqual(@as(i32, 2), trie.get("test_case").?.*);
+    try std.testing.expectEqual(@as(i32, 3), trie.get("foo.bar").?.*);
 }

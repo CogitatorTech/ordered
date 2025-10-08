@@ -16,13 +16,13 @@ pub fn SortedSet(
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
-                .items = std.ArrayList(T).init(allocator),
+                .items = .{},
                 .allocator = allocator,
             };
         }
 
         pub fn deinit(self: *Self) void {
-            self.items.deinit();
+            self.items.deinit(self.allocator);
         }
 
         fn compareFn(key: T, item: T) std.math.Order {
@@ -32,7 +32,7 @@ pub fn SortedSet(
         /// Adds a value to the vector, maintaining sort order.
         pub fn add(self: *Self, value: T) !void {
             const index = std.sort.lowerBound(T, self.items.items, value, compareFn);
-            try self.items.insert(index, value);
+            try self.items.insert(self.allocator, index, value);
         }
 
         /// Removes an element at a given index.
@@ -72,4 +72,96 @@ test "SortedSet basic functionality" {
 
     _ = vec.remove(1); // Remove 75
     try std.testing.expectEqualSlices(i32, &.{ 50, 100 }, vec.items.items);
+}
+
+test "SortedSet: empty set operations" {
+    const allocator = std.testing.allocator;
+    var vec = SortedSet(i32, i32Compare).init(allocator);
+    defer vec.deinit();
+
+    try std.testing.expect(!vec.contains(42));
+    try std.testing.expectEqual(@as(?usize, null), vec.findIndex(42));
+    try std.testing.expectEqual(@as(usize, 0), vec.items.items.len);
+}
+
+test "SortedSet: single element" {
+    const allocator = std.testing.allocator;
+    var vec = SortedSet(i32, i32Compare).init(allocator);
+    defer vec.deinit();
+
+    try vec.add(42);
+    try std.testing.expect(vec.contains(42));
+    try std.testing.expectEqual(@as(usize, 1), vec.items.items.len);
+
+    const removed = vec.remove(0);
+    try std.testing.expectEqual(@as(i32, 42), removed);
+    try std.testing.expectEqual(@as(usize, 0), vec.items.items.len);
+}
+
+test "SortedSet: duplicate values" {
+    const allocator = std.testing.allocator;
+    var vec = SortedSet(i32, i32Compare).init(allocator);
+    defer vec.deinit();
+
+    try vec.add(10);
+    try vec.add(10);
+    try vec.add(10);
+
+    // Duplicates are allowed in this implementation
+    try std.testing.expectEqual(@as(usize, 3), vec.items.items.len);
+}
+
+test "SortedSet: negative numbers" {
+    const allocator = std.testing.allocator;
+    var vec = SortedSet(i32, i32Compare).init(allocator);
+    defer vec.deinit();
+
+    try vec.add(-5);
+    try vec.add(-10);
+    try vec.add(0);
+    try vec.add(5);
+
+    try std.testing.expectEqualSlices(i32, &.{ -10, -5, 0, 5 }, vec.items.items);
+}
+
+test "SortedSet: large dataset" {
+    const allocator = std.testing.allocator;
+    var vec = SortedSet(i32, i32Compare).init(allocator);
+    defer vec.deinit();
+
+    // Insert in reverse order
+    var i: i32 = 100;
+    while (i >= 0) : (i -= 1) {
+        try vec.add(i);
+    }
+
+    // Verify sorted
+    try std.testing.expectEqual(@as(usize, 101), vec.items.items.len);
+    for (vec.items.items, 0..) |val, idx| {
+        try std.testing.expectEqual(@as(i32, @intCast(idx)), val);
+    }
+}
+
+test "SortedSet: remove boundary cases" {
+    const allocator = std.testing.allocator;
+    var vec = SortedSet(i32, i32Compare).init(allocator);
+    defer vec.deinit();
+
+    try vec.add(1);
+    try vec.add(2);
+    try vec.add(3);
+    try vec.add(4);
+    try vec.add(5);
+
+    // Remove first
+    _ = vec.remove(0);
+    try std.testing.expectEqualSlices(i32, &.{ 2, 3, 4, 5 }, vec.items.items);
+
+    // Remove last
+    _ = vec.remove(3);
+    try std.testing.expectEqualSlices(i32, &.{ 2, 3, 4 }, vec.items.items);
+
+    // Remove middle
+    _ = vec.remove(1);
+    try std.testing.expectEqualSlices(i32, &.{ 2, 4 }, vec.items.items);
 }

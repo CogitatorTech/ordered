@@ -1,7 +1,10 @@
 ## Ordered Examples
 
-| # | File                                         | Description                                                                |
-|---|----------------------------------------------|----------------------------------------------------------------------------|
-| 1 | [e1_bounded_queue.zig](e1_bounded_queue.zig) | An example that shows contracts on a `BoundedQueue` data structure         |
-| 2 | [e2_file_parser.zig](e2_file_parser.zig)     | An example of using contracts to build a robust file parser                |
-| 3 | [e3_linked_list.zig](e3_linked_list.zig)     | An example that uses contracts to guarantee the integrity of a linked list |
+| # | File                                           | Description                                         |
+|---|------------------------------------------------|-----------------------------------------------------|
+| 1 | [e1_btree_map.zig](e1_btree_map.zig)           | An example using the `BTreeMap` data structure      |
+| 2 | [e2_sorted_set.zig](e2_sorted_set.zig)         | An example using the `SortedSet` data structure     |
+| 3 | [e3_red_black_tree.zig](e3_red_black_tree.zig) | An example using the `RedBlackTree` data structure  |
+| 4 | [e4_skip_list.zig](e4_skip_list.zig)           | An example using the `SkipList` data structure      |
+| 5 | [e5_trie.zig](e5_trie.zig)                     | An example using the `Trie` data structure          |
+| 6 | [e6_cartesian_tree.zig](e6_cartesian_tree.zig) | An example using the `CartesianTree` data structure |
