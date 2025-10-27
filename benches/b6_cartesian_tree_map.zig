@@ -7,28 +7,21 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    std.debug.print("=== RedBlackTree Benchmark ===\n\n", .{});
+    std.debug.print("=== CartesianTree Benchmark ===\n\n", .{});
 
-    const sizes = [_]usize{ 1000, 10_000, 100_000 };
+    const sizes = [_]usize{ 1000, 10_000, 100_000, 1_000_000 };
 
     inline for (sizes) |size| {
-        try benchmarkInsert(allocator, size);
-        try benchmarkFind(allocator, size);
+        try benchmarkPut(allocator, size);
+        try benchmarkGet(allocator, size);
         try benchmarkRemove(allocator, size);
         try benchmarkIterator(allocator, size);
         std.debug.print("\n", .{});
     }
 }
 
-const Context = struct {
-    pub fn lessThan(self: @This(), a: i32, b: i32) bool {
-        _ = self;
-        return a < b;
-    }
-};
-
-fn benchmarkInsert(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.RedBlackTree(i32, Context).init(allocator, Context{});
+fn benchmarkPut(allocator: std.mem.Allocator, size: usize) !void {
+    var tree = ordered.CartesianTreeMap(i32, i32).init(allocator);
     defer tree.deinit();
 
     var timer = try Timer.start();
@@ -36,26 +29,26 @@ fn benchmarkInsert(allocator: std.mem.Allocator, size: usize) !void {
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try tree.put(i);
+        try tree.put(i, i * 2);
     }
 
     const elapsed = timer.read() - start;
     const ns_per_op = elapsed / size;
 
-    std.debug.print("Insert {} items: {d:.2} ms ({d} ns/op)\n", .{
+    std.debug.print("Put {} items: {d:.2} ms ({d} ns/op)\n", .{
         size,
         @as(f64, @floatFromInt(elapsed)) / 1_000_000.0,
         ns_per_op,
     });
 }
 
-fn benchmarkFind(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.RedBlackTree(i32, Context).init(allocator, Context{});
+fn benchmarkGet(allocator: std.mem.Allocator, size: usize) !void {
+    var tree = ordered.CartesianTreeMap(i32, i32).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try tree.put(i);
+        try tree.put(i, i * 2);
     }
 
     var timer = try Timer.start();
@@ -64,13 +57,13 @@ fn benchmarkFind(allocator: std.mem.Allocator, size: usize) !void {
     i = 0;
     var found: usize = 0;
     while (i < size) : (i += 1) {
-        if (tree.get(i) != null) found += 1;
+        if (tree.get(i)) |_| found += 1;
     }
 
     const elapsed = timer.read() - start;
     const ns_per_op = elapsed / size;
 
-    std.debug.print("Find {} items: {d:.2} ms ({d} ns/op, found: {})\n", .{
+    std.debug.print("Get {} items: {d:.2} ms ({d} ns/op, found: {})\n", .{
         size,
         @as(f64, @floatFromInt(elapsed)) / 1_000_000.0,
         ns_per_op,
@@ -79,12 +72,12 @@ fn benchmarkFind(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkRemove(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.RedBlackTree(i32, Context).init(allocator, Context{});
+    var tree = ordered.CartesianTreeMap(i32, i32).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try tree.put(i);
+        try tree.put(i, i * 2);
     }
 
     var timer = try Timer.start();
@@ -106,18 +99,18 @@ fn benchmarkRemove(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkIterator(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.RedBlackTree(i32, Context).init(allocator, Context{});
+    var tree = ordered.CartesianTreeMap(i32, i32).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try tree.put(i);
+        try tree.put(i, i * 2);
     }
 
     var timer = try Timer.start();
     const start = timer.lap();
 
-    var iter = try tree.iterator();
+    var iter = try tree.iterator(allocator);
     defer iter.deinit();
 
     var count: usize = 0;

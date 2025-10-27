@@ -1,87 +1,39 @@
-## Benchmarks
-
-This directory contains benchmarks for the data structures in the `ordered` library.
-
-### Running Benchmarks
-
-Each benchmark can be run using the following command pattern:
-
-```bash
-zig build bench-<benchmark_name>
-```
+### Ordered Benchmarks
 
 #### Available Benchmarks
 
-- **BTreeMap**: `zig build bench-btree_map_bench`
-- **SortedSet**: `zig build bench-sorted_set_bench`
-- **RedBlackTree**: `zig build bench-red_black_tree_bench`
-- **SkipList**: `zig build bench-skip_list_bench`
-- **Trie**: `zig build bench-trie_bench`
-- **CartesianTree**: `zig build bench-cartesian_tree_bench`
+| # | File                                                   | Description                                      |
+|---|--------------------------------------------------------|--------------------------------------------------|
+| 1 | [b1_btree_map.zig](b1_btree_map.zig)                   | Benchmarks for B-tree map implementation         |
+| 2 | [b2_sorted_set.zig](b2_sorted_set.zig)                 | Benchmarks for Sorted set implementation         |
+| 3 | [b3_red_black_tree_set.zig](b3_red_black_tree_set.zig) | Benchmarks for Red-black tree set implementation |
+| 4 | [b4_skip_list_map.zig](b4_skip_list_map.zig)           | Benchmarks for Skip list map implementation      |
+| 5 | [b5_trie_map.zig](b5_trie_map.zig)                     | Benchmarks for Trie map implementation           |
+| 6 | [b6_cartesian_tree_map.zig](b6_cartesian_tree_map.zig) | Benchmarks for Cartesian tree map implementation |
 
-### What Each Benchmark Tests
+#### Running Benchmarks
 
-#### BTreeMap Benchmark
-- **Insert**: Sequential insertion of integers
-- **Lookup**: Finding all inserted keys
-- **Delete**: Removing all keys
+To execute a specific benchmark, run:
 
-#### SortedSet Benchmark
-- **Add**: Adding elements while maintaining a sorted order
-- **Contains**: Checking if elements exist
-- **Remove**: Removing elements from the set
-
-#### RedBlackTree Benchmark
-- **Insert**: Inserting nodes with self-balancing
-- **Find**: Searching for nodes
-- **Remove**: Deleting nodes while maintaining balance
-- **Iterator**: In-order traversal performance
-
-#### SkipList Benchmark
-- **Put**: Inserting key-value pairs with probabilistic levels
-- **Get**: Retrieving values by key
-- **Delete**: Removing key-value pairs
-
-#### Trie Benchmark
-- **Put**: Inserting strings with associated values
-- **Get**: Retrieving values by string key
-- **Contains**: Checking if strings exist
-- **Prefix Search**: Finding all keys with a common prefix
-
-#### CartesianTree Benchmark
-- **Put**: Inserting key-value pairs with random priorities
-- **Get**: Retrieving values by key
-- **Remove**: Deleting nodes
-- **Iterator**: In-order traversal performance
-
-### Benchmark Sizes
-
-Each benchmark tests with multiple dataset sizes:
-- Small: 1,000 items
-- Medium: 10,000 items
-- Large: 50,000 - 100,000 items (varies by data structure)
-
-### Build Configuration
-
-Benchmarks are compiled with `ReleaseFast` optimization mode for accurate performance measurements.
-
-### Example Output
-
-```
-=== BTreeMap Benchmark ===
-
-Insert 1000 items: 0.42 ms (420 ns/op)
-Lookup 1000 items: 0.18 ms (180 ns/op, found: 1000)
-Delete 1000 items: 0.35 ms (350 ns/op)
-
-Insert 10000 items: 5.23 ms (523 ns/op)
-Lookup 10000 items: 2.10 ms (210 ns/op, found: 10000)
-Delete 10000 items: 4.15 ms (415 ns/op)
+```sh
+zig build bench-{FILE_NAME_WITHOUT_EXTENSION}
 ```
 
-### Notes
+For example:
 
-- All benchmarks use a simple integer or string key type for consistency
-- Times are reported in both total milliseconds and nanoseconds per operation
-- Memory allocations use `GeneralPurposeAllocator` for simulating a more realistic memory usage
-- Results may vary based on a hardware and system load
+```sh
+zig build bench-b1_btree_map
+```
+
+> [!NOTE]
+> Each benchmark measures three core operations across multiple data sizes:
+> 1. **Insert and Put**: measures the time to insert elements sequentially into an empty data structure
+> 2. **Lookup**: measures the time to search for all elements in a pre-populated structure
+> 3. **Delete**: measures the time to remove all elements from a pre-populated structure
+>
+> **Test Sizes**: benchmarks run with 1,000, 10,000, 100,000, and 1,000,000 elements to show performance scaling.
+>
+> **Timing Method**: uses `std.time.Timer` for high-precision nanosecond-level timing. Each operation is timed in bulk,
+> then divided by the number of operations to get per-operation timing.
+>
+> **Compilation**: benchmarks are compiled with `ReleaseFast` optimization (see [build.zig](../build.zig)).

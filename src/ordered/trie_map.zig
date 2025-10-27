@@ -23,22 +23,22 @@
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the trie (via put/remove/clear) while iterating will cause
+//! WARNING: Modifying the trie (via put, remove, or clear) while iterating will cause
 //! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
 
-/// Creates a Trie type that maps string keys to values of type V.
+/// Creates a TrieMap type that maps string keys to values of type V.
 ///
 /// ## Example
 /// ```zig
-/// var trie = try Trie([]const u8).init(allocator);
+/// var trie = try TrieMap([]const u8).init(allocator);
 /// try trie.put("hello", "world");
 /// if (trie.get("hello")) |value| {
 ///     std.debug.print("{s}\n", .{value.*});
 /// }
 /// ```
-pub fn Trie(comptime V: type) type {
+pub fn TrieMap(comptime V: type) type {
     return struct {
         const Self = @This();
 
@@ -97,15 +97,12 @@ pub fn Trie(comptime V: type) type {
             self.* = undefined;
         }
 
-        /// Removes all elements from the trie while keeping the root allocated.
+        /// Removes all elements from the trie.
         ///
         /// Time complexity: O(n) where n is total number of nodes
-        ///
-        /// ## Errors
-        /// Returns `error.OutOfMemory` if root node reallocation fails.
-        pub fn clear(self: *Self) !void {
+        pub fn clear(self: *Self) void {
             self.root.deinit(self.allocator);
-            self.root = try TrieNode.init(self.allocator);
+            self.root = TrieNode.init(self.allocator) catch unreachable;
             self.len = 0;
         }
 
@@ -356,7 +353,7 @@ pub fn Trie(comptime V: type) type {
                 self.current_key.deinit(self.allocator);
             }
 
-            pub fn next(self: *Iterator) ?struct { key: []const u8, value: V } {
+            pub fn next(self: *Iterator) !?struct { key: []const u8, value: V } {
                 while (self.stack.items.len > 0) {
                     var frame = &self.stack.items[self.stack.items.len - 1];
 
@@ -369,13 +366,13 @@ pub fn Trie(comptime V: type) type {
                         const char = entry.key_ptr.*;
                         const child = entry.value_ptr.*;
 
-                        self.current_key.append(self.allocator, char) catch return null;
+                        try self.current_key.append(self.allocator, char);
 
-                        self.stack.append(self.allocator, IteratorFrame{
+                        try self.stack.append(self.allocator, IteratorFrame{
                             .node = child,
                             .child_iter = child.children.iterator(),
                             .visited_self = false,
-                        }) catch return null;
+                        });
                     } else {
                         _ = self.stack.pop();
                         if (self.current_key.items.len > 0) {
@@ -393,9 +390,9 @@ pub fn Trie(comptime V: type) type {
     };
 }
 
-test "Trie: basic operations" {
+test "TrieMap: basic operations" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("hello", 1);
@@ -408,9 +405,9 @@ test "Trie: basic operations" {
     try std.testing.expect(trie.get("bye") == null);
 }
 
-test "Trie: empty trie operations" {
+test "TrieMap: empty trie operations" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try std.testing.expect(trie.get("key") == null);
@@ -419,9 +416,9 @@ test "Trie: empty trie operations" {
     try std.testing.expect(!trie.hasPrefix("pre"));
 }
 
-test "Trie: single character keys" {
+test "TrieMap: single character keys" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("a", 1);
@@ -433,9 +430,9 @@ test "Trie: single character keys" {
     try std.testing.expect(!trie.contains("d"));
 }
 
-test "Trie: empty string key" {
+test "TrieMap: empty string key" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("", 42);
@@ -447,9 +444,9 @@ test "Trie: empty string key" {
     try std.testing.expectEqual(@as(usize, 0), trie.len);
 }
 
-test "Trie: overlapping prefixes" {
+test "TrieMap: overlapping prefixes" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("test", 1);
@@ -464,9 +461,9 @@ test "Trie: overlapping prefixes" {
     try std.testing.expect(trie.hasPrefix("test"));
 }
 
-test "Trie: delete with shared prefixes" {
+test "TrieMap: delete with shared prefixes" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("car", 1);
@@ -481,9 +478,9 @@ test "Trie: delete with shared prefixes" {
     try std.testing.expect(trie.contains("care"));
 }
 
-test "Trie: delete non-existent key" {
+test "TrieMap: delete non-existent key" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("hello", 1);
@@ -493,9 +490,9 @@ test "Trie: delete non-existent key" {
     try std.testing.expectEqual(@as(usize, 1), trie.len);
 }
 
-test "Trie: delete prefix that is not a key" {
+test "TrieMap: delete prefix that is not a key" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("testing", 1);
@@ -506,9 +503,9 @@ test "Trie: delete prefix that is not a key" {
     try std.testing.expect(trie.contains("testing"));
 }
 
-test "Trie: update existing key" {
+test "TrieMap: update existing key" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("key", 100);
@@ -519,9 +516,9 @@ test "Trie: update existing key" {
     try std.testing.expectEqual(@as(i32, 200), trie.get("key").?.*);
 }
 
-test "Trie: hasPrefix with exact match" {
+test "TrieMap: hasPrefix with exact match" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("hello", 1);
@@ -532,9 +529,9 @@ test "Trie: hasPrefix with exact match" {
     try std.testing.expect(!trie.hasPrefix("helloo"));
 }
 
-test "Trie: getPtr mutation" {
+test "TrieMap: getPtr mutation" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("key", 100);
@@ -546,9 +543,9 @@ test "Trie: getPtr mutation" {
     try std.testing.expectEqual(@as(i32, 999), trie.get("key").?.*);
 }
 
-test "Trie: many keys" {
+test "TrieMap: many keys" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     const keys = [_][]const u8{
@@ -567,9 +564,9 @@ test "Trie: many keys" {
     }
 }
 
-test "Trie: delete all keys" {
+test "TrieMap: delete all keys" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("a", 1);
@@ -584,9 +581,9 @@ test "Trie: delete all keys" {
     try std.testing.expect(!trie.hasPrefix("a"));
 }
 
-test "Trie: special characters" {
+test "TrieMap: special characters" {
     const allocator = std.testing.allocator;
-    var trie = try Trie(i32).init(allocator);
+    var trie = try TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     try trie.put("hello-world", 1);

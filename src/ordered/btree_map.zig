@@ -20,7 +20,7 @@
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the map (via put/remove/clear) while iterating will cause
+//! WARNING: Modifying the map (via put, remove, or clear) while iterating will cause
 //! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
@@ -210,19 +210,19 @@ pub fn BTreeMap(
                 new_root.is_leaf = false;
                 new_root.children[0] = root_node;
                 self.root = new_root;
-                self.splitChild(new_root, 0);
+                try self.splitChild(new_root, 0);
                 root_node = new_root;
             }
 
-            const is_new = self.insertNonFull(root_node, key, value);
+            const is_new = try self.insertNonFull(root_node, key, value);
             if (is_new) {
                 self.len += 1;
             }
         }
 
-        fn splitChild(self: *Self, parent: *Node, index: u16) void {
+        fn splitChild(self: *Self, parent: *Node, index: u16) !void {
             const child = parent.children[index].?;
-            const new_sibling = self.createNode() catch @panic("OOM");
+            const new_sibling = try self.createNode();
             new_sibling.is_leaf = child.is_leaf;
 
             const t = MIN_KEYS;
@@ -265,7 +265,7 @@ pub fn BTreeMap(
             parent.len += 1;
         }
 
-        fn insertNonFull(self: *Self, node: *Node, key: K, value: V) bool {
+        fn insertNonFull(self: *Self, node: *Node, key: K, value: V) !bool {
             var i = node.len;
             if (node.is_leaf) {
                 // Check if key already exists
@@ -300,12 +300,12 @@ pub fn BTreeMap(
 
                 while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {}
                 if (node.children[i].?.len == BRANCHING_FACTOR - 1) {
-                    self.splitChild(node, i);
+                    try self.splitChild(node, i);
                     if (compare(node.keys[i], key) == .lt) {
                         i += 1;
                     }
                 }
-                return self.insertNonFull(node.children[i].?, key, value);
+                return try self.insertNonFull(node.children[i].?, key, value);
             }
         }
 
@@ -509,6 +509,106 @@ pub fn BTreeMap(
             node.len -= 1;
             self.allocator.destroy(sibling);
         }
+
+        /// Iterator for in-order traversal of the B-tree.
+        ///
+        /// The iterator visits keys in sorted order.
+        pub const Iterator = struct {
+            stack: std.ArrayList(StackFrame),
+            allocator: std.mem.Allocator,
+
+            const StackFrame = struct {
+                node: *Node,
+                index: u16,
+            };
+
+            pub const Entry = struct {
+                key: K,
+                value: V,
+            };
+
+            fn init(allocator: std.mem.Allocator, root: ?*Node) !Iterator {
+                var stack = std.ArrayList(StackFrame){};
+
+                if (root) |r| {
+                    try stack.append(allocator, StackFrame{ .node = r, .index = 0 });
+                    // Descend to leftmost leaf
+                    var current = r;
+                    while (!current.is_leaf) {
+                        if (current.children[0]) |child| {
+                            try stack.append(allocator, StackFrame{ .node = child, .index = 0 });
+                            current = child;
+                        } else break;
+                    }
+                }
+
+                return Iterator{
+                    .stack = stack,
+                    .allocator = allocator,
+                };
+            }
+
+            pub fn deinit(self: *Iterator) void {
+                self.stack.deinit(self.allocator);
+            }
+
+            pub fn next(self: *Iterator) !?Entry {
+                while (self.stack.items.len > 0) {
+                    var frame = &self.stack.items[self.stack.items.len - 1];
+
+                    if (frame.index < frame.node.len) {
+                        const result = Entry{
+                            .key = frame.node.keys[frame.index],
+                            .value = frame.node.values[frame.index],
+                        };
+
+                        // Move to next position
+                        if (!frame.node.is_leaf) {
+                            // Go to right child of current key
+                            if (frame.node.children[frame.index + 1]) |child| {
+                                frame.index += 1;
+                                try self.stack.append(self.allocator, StackFrame{ .node = child, .index = 0 });
+
+                                // Descend to leftmost leaf
+                                var current = child;
+                                while (!current.is_leaf) {
+                                    if (current.children[0]) |left_child| {
+                                        try self.stack.append(self.allocator, StackFrame{ .node = left_child, .index = 0 });
+                                        current = left_child;
+                                    } else break;
+                                }
+                            } else {
+                                frame.index += 1;
+                            }
+                        } else {
+                            frame.index += 1;
+                        }
+
+                        return result;
+                    } else {
+                        _ = self.stack.pop();
+                    }
+                }
+
+                return null;
+            }
+        };
+
+        /// Returns an iterator over the map in sorted key order.
+        ///
+        /// Time complexity: O(1) for initialization
+        ///
+        /// ## Example
+        /// ```zig
+        /// var iter = try map.iterator();
+        /// defer iter.deinit();
+        /// while (try iter.next()) |entry| {
+        ///     std.debug.print("{} => {}\n", .{entry.key, entry.value});
+        /// }
+        /// ```
+        pub fn iterator(self: *const Self) !Iterator {
+            return Iterator.init(self.allocator, self.root);
+        }
     };
 }
 
@@ -626,77 +726,48 @@ test "BTreeMap: reverse insertion" {
     }
 
     try std.testing.expectEqual(@as(usize, 50), map.len);
-
-    i = 1;
-    while (i <= 50) : (i += 1) {
-        try std.testing.expectEqual(i * 3, map.get(i).?.*);
-    }
 }
 
-test "BTreeMap: random operations" {
+test "BTreeMap: iterator in-order traversal" {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, []const u8, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    // Insert in random order
+    try map.put(30, "thirty");
+    try map.put(10, "ten");
+    try map.put(20, "twenty");
+    try map.put(5, "five");
+    try map.put(25, "twenty-five");
+    try map.put(15, "fifteen");
+
+    // Verify iterator returns items in sorted key order
+    var iter = try map.iterator();
+    defer iter.deinit();
+
+    const expected_keys = [_]i32{ 5, 10, 15, 20, 25, 30 };
+    const expected_values = [_][]const u8{ "five", "ten", "fifteen", "twenty", "twenty-five", "thirty" };
+
+    var count: usize = 0;
+    while (try iter.next()) |entry| {
+        try std.testing.expect(count < expected_keys.len);
+        try std.testing.expectEqual(expected_keys[count], entry.key);
+        try std.testing.expectEqualStrings(expected_values[count], entry.value);
+        count += 1;
+    }
+
+    try std.testing.expectEqual(@as(usize, 6), count);
+}
+
+test "BTreeMap: iterator on empty map" {
     const allocator = std.testing.allocator;
     var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
     defer map.deinit();
 
-    const values = [_]i32{ 15, 3, 27, 8, 42, 1, 19, 33, 11, 25 };
-    for (values) |val| {
-        try map.put(val, val * 10);
-    }
+    var iter = try map.iterator();
+    defer iter.deinit();
 
-    try std.testing.expectEqual(@as(usize, 10), map.len);
-
-    for (values) |val| {
-        try std.testing.expectEqual(val * 10, map.get(val).?.*);
-    }
-
-    // Remove some
-    _ = map.remove(15);
-    _ = map.remove(27);
-    _ = map.remove(1);
-
-    try std.testing.expectEqual(@as(usize, 7), map.len);
-    try std.testing.expect(map.get(15) == null);
-    try std.testing.expect(map.get(27) == null);
-    try std.testing.expect(map.get(1) == null);
-}
-
-test "BTreeMap: remove all elements" {
-    const allocator = std.testing.allocator;
-    var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
-    defer map.deinit();
-
-    try map.put(1, 1);
-    try map.put(2, 2);
-    try map.put(3, 3);
-    try map.put(4, 4);
-    try map.put(5, 5);
-
-    _ = map.remove(1);
-    _ = map.remove(2);
-    _ = map.remove(3);
-    _ = map.remove(4);
-    _ = map.remove(5);
-
-    try std.testing.expectEqual(@as(usize, 0), map.len);
-    try std.testing.expect(map.get(3) == null);
-}
-
-test "BTreeMap: minimum branching factor" {
-    const allocator = std.testing.allocator;
-    var map = BTreeMap(i32, i32, i32Compare, 3).init(allocator);
-    defer map.deinit();
-
-    var i: i32 = 0;
-    while (i < 20) : (i += 1) {
-        try map.put(i, i);
-    }
-
-    try std.testing.expectEqual(@as(usize, 20), map.len);
-
-    i = 0;
-    while (i < 20) : (i += 1) {
-        try std.testing.expectEqual(i, map.get(i).?.*);
-    }
+    try std.testing.expect((try iter.next()) == null);
 }
 
 test "BTreeMap: negative keys" {

@@ -8,7 +8,7 @@
 //! - Insert: O(log n) average, O(n) worst case
 //! - Remove: O(log n) average, O(n) worst case
 //! - Search: O(log n) average, O(n) worst case
-//! - Space: O(n log n) average
+//! - Space: O(n) average (with level distribution, approximately 1.33n pointers)
 //!
 //! ## Use Cases
 //! - Ordered key-value storage with simpler implementation than trees
@@ -20,7 +20,7 @@
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the skip list (via put/remove/clear) while iterating will
+//! WARNING: Modifying the skip list (via put, remove, or clear) while iterating will
 //! cause undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
@@ -33,7 +33,7 @@ const std = @import("std");
 /// - `compare`: Comparison function for keys
 /// - `MAX_LEVEL`: Maximum height of the skip list (1-32). Higher values allow more
 ///   elements but use more memory. Typical value: 16.
-pub fn SkipList(
+pub fn SkipListMap(
     comptime K: type,
     comptime V: type,
     comptime compare: fn (lhs: K, rhs: K) std.math.Order,
@@ -294,9 +294,9 @@ fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
     return std.math.order(lhs, rhs);
 }
 
-test "SkipList: basic operations" {
+test "SkipListMap: basic operations" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, []const u8, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, []const u8, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     // Test put and get
@@ -326,9 +326,9 @@ test "SkipList: basic operations" {
     try std.testing.expect(!list.contains(20));
 }
 
-test "SkipList: iteration order" {
+test "SkipListMap: iteration order" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     // Insert in random order
@@ -353,9 +353,9 @@ test "SkipList: iteration order" {
     try std.testing.expectEqual(expected_keys.len, index);
 }
 
-test "SkipList: string keys" {
+test "SkipListMap: string keys" {
     const allocator = std.testing.allocator;
-    var list = try SkipList([]const u8, i32, strCompare, 16).init(allocator);
+    var list = try SkipListMap([]const u8, i32, strCompare, 16).init(allocator);
     defer list.deinit();
 
     try list.put("apple", 1);
@@ -367,9 +367,9 @@ test "SkipList: string keys" {
     try std.testing.expect(!list.contains("date"));
 }
 
-test "SkipList: empty list operations" {
+test "SkipListMap: empty list operations" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     try std.testing.expect(list.get(42) == null);
@@ -378,9 +378,9 @@ test "SkipList: empty list operations" {
     try std.testing.expect(!list.contains(42));
 }
 
-test "SkipList: single element" {
+test "SkipListMap: single element" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     try list.put(42, 100);
@@ -392,9 +392,9 @@ test "SkipList: single element" {
     try std.testing.expectEqual(@as(usize, 0), list.len);
 }
 
-test "SkipList: large dataset sequential" {
+test "SkipListMap: large dataset sequential" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     var i: i32 = 0;
@@ -410,9 +410,9 @@ test "SkipList: large dataset sequential" {
     }
 }
 
-test "SkipList: reverse insertion" {
+test "SkipListMap: reverse insertion" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     var i: i32 = 50;
@@ -431,9 +431,9 @@ test "SkipList: reverse insertion" {
     }
 }
 
-test "SkipList: delete non-existent" {
+test "SkipListMap: delete non-existent" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     try list.put(10, 10);
@@ -444,9 +444,9 @@ test "SkipList: delete non-existent" {
     try std.testing.expectEqual(@as(usize, 2), list.len);
 }
 
-test "SkipList: delete all elements" {
+test "SkipListMap: delete all elements" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     try list.put(1, 1);
@@ -461,9 +461,9 @@ test "SkipList: delete all elements" {
     try std.testing.expect(list.get(2) == null);
 }
 
-test "SkipList: negative keys" {
+test "SkipListMap: negative keys" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     try list.put(-10, 10);
@@ -475,9 +475,9 @@ test "SkipList: negative keys" {
     try std.testing.expectEqual(@as(i32, -5), list.get(5).?.*);
 }
 
-test "SkipList: getPtr mutation" {
+test "SkipListMap: getPtr mutation" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 16).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
     defer list.deinit();
 
     try list.put(10, 100);
@@ -489,9 +489,9 @@ test "SkipList: getPtr mutation" {
     try std.testing.expectEqual(@as(i32, 999), list.get(10).?.*);
 }
 
-test "SkipList: minimum max level" {
+test "SkipListMap: minimum max level" {
     const allocator = std.testing.allocator;
-    var list = try SkipList(i32, i32, i32Compare, 1).init(allocator);
+    var list = try SkipListMap(i32, i32, i32Compare, 1).init(allocator);
     defer list.deinit();
 
     try list.put(1, 1);

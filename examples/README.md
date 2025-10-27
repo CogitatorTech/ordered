@@ -1,24 +1,26 @@
-### Usage Examples
+### Ordered Examples
 
-| # | File                                           | Description                                         |
-|---|------------------------------------------------|-----------------------------------------------------|
-| 1 | [e1_btree_map.zig](e1_btree_map.zig)           | An example using the `BTreeMap` data structure      |
-| 2 | [e2_sorted_set.zig](e2_sorted_set.zig)         | An example using the `SortedSet` data structure     |
-| 3 | [e3_red_black_tree.zig](e3_red_black_tree.zig) | An example using the `RedBlackTree` data structure  |
-| 4 | [e4_skip_list.zig](e4_skip_list.zig)           | An example using the `SkipList` data structure      |
-| 5 | [e5_trie.zig](e5_trie.zig)                     | An example using the `Trie` data structure          |
-| 6 | [e6_cartesian_tree.zig](e6_cartesian_tree.zig) | An example using the `CartesianTree` data structure |
+#### List of Examples
 
-### Running Examples
+| # | File                                                   | Description                         |
+|---|--------------------------------------------------------|-------------------------------------|
+| 1 | [e1_btree_map.zig](e1_btree_map.zig)                   | Example of using B-tree map         |
+| 2 | [e2_sorted_set.zig](e2_sorted_set.zig)                 | Example of using Sorted set         |
+| 3 | [e3_red_black_tree_set.zig](e3_red_black_tree_set.zig) | Example of using Red-black tree set |
+| 4 | [e4_skip_list_map.zig](e4_skip_list_map.zig)           | Example of using Skip list map      |
+| 5 | [e5_trie_map.zig](e5_trie_map.zig)                     | Example of using Trie map           |
+| 6 | [e6_cartesian_tree_map.zig](e6_cartesian_tree_map.zig) | Example of using Cartesian tree map |
 
-To run an example, run the following command from the root of the repository:
+#### Running Examples
 
-```zig
+To execute an example, run the following command from the root of the repository:
+
+```sh
 zig build run-{FILE_NAME_WITHOUT_EXTENSION}
 ```
 
 For example:
 
-```zig
+```sh
 zig build run-e1_btree_map
 ```

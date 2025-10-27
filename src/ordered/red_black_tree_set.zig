@@ -1,6 +1,6 @@
-//! Red-Black Tree - A self-balancing binary search tree.
+//! Red-black tree - A self-balancing binary search tree.
 //!
-//! Red-Black Trees guarantee O(log n) time complexity for insert, delete, and search
+//! Red-black trees guarantee O(log n) time complexity for insert, delete, and search
 //! operations by maintaining balance through color properties and rotations. They are
 //! widely used in standard libraries (e.g., C++ std::map, Java TreeMap).
 //!
@@ -27,7 +27,7 @@
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the tree (via put/remove/clear) while iterating will
+//! WARNING: Modifying the tree (via put, remove, or clear) while iterating will
 //! cause undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
@@ -35,7 +35,7 @@ const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const assert = std.debug.assert;
 
-/// Creates a Red-Black Tree type for the given data type and comparison context.
+/// Creates a Red-black tree type for the given data type and comparison context.
 ///
 /// ## Parameters
 /// - `T`: The data type to store in the tree
@@ -48,9 +48,9 @@ const assert = std.debug.assert;
 ///         return a < b;
 ///     }
 /// };
-/// var tree = RedBlackTree(i32, Context).init(allocator, .{});
+/// var tree = RedBlackTreeSet(i32, Context).init(allocator, .{});
 /// ```
-pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
+pub fn RedBlackTreeSet(comptime T: type, comptime Context: type) type {
     return struct {
         const Self = @This();
 
@@ -77,7 +77,7 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         context: Context,
         size: usize,
 
-        /// Creates a new empty Red-Black Tree.
+        /// Creates a new empty Red-black tree.
         ///
         /// ## Parameters
         /// - `allocator`: Memory allocator for node allocation
@@ -118,7 +118,7 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         /// Returns the number of elements in the tree.
         ///
         /// Time complexity: O(1)
-        pub fn count(self: Self) usize {
+        pub fn count(self: *const Self) usize {
             return self.size;
         }
 
@@ -428,7 +428,7 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         /// to access or modify the data directly.
         ///
         /// Time complexity: O(log n)
-        pub fn get(self: Self, data: T) ?*Node {
+        pub fn get(self: *const Self, data: T) ?*Node {
             var current = self.root;
 
             while (current) |node| {
@@ -447,11 +447,11 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         /// Checks whether the tree contains the given value.
         ///
         /// Time complexity: O(log n)
-        pub fn contains(self: Self, data: T) bool {
+        pub fn contains(self: *const Self, data: T) bool {
             return self.get(data) != null;
         }
 
-        fn findMinimum(self: Self, node: *Node) *Node {
+        fn findMinimum(self: *const Self, node: *Node) *Node {
             _ = self; // Mark as intentionally unused
             var current = node;
             while (current.left) |left| {
@@ -516,7 +516,7 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             }
         };
 
-        pub fn iterator(self: Self) !Iterator {
+        pub fn iterator(self: *const Self) !Iterator {
             return Iterator.init(self.allocator, self.root);
         }
     };
@@ -533,13 +533,13 @@ pub fn DefaultContext(comptime T: type) type {
 }
 
 // Convenience type aliases
-pub fn RedBlackTreeManaged(comptime T: type) type {
-    return RedBlackTree(T, DefaultContext(T));
+pub fn RedBlackTreeSetManaged(comptime T: type) type {
+    return RedBlackTreeSet(T, DefaultContext(T));
 }
 
-test "RedBlackTree: basic operations" {
+test "RedBlackTreeSet: basic operations" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(10);
@@ -552,9 +552,9 @@ test "RedBlackTree: basic operations" {
     try std.testing.expect(!tree.contains(99));
 }
 
-test "RedBlackTree: empty tree operations" {
+test "RedBlackTreeSet: empty tree operations" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try std.testing.expect(!tree.contains(42));
@@ -562,9 +562,9 @@ test "RedBlackTree: empty tree operations" {
     try std.testing.expect(tree.remove(42) == null);
 }
 
-test "RedBlackTree: single element" {
+test "RedBlackTreeSet: single element" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(42);
@@ -578,9 +578,9 @@ test "RedBlackTree: single element" {
     try std.testing.expect(tree.root == null);
 }
 
-test "RedBlackTree: duplicate insertions" {
+test "RedBlackTreeSet: duplicate insertions" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(10);
@@ -591,9 +591,9 @@ test "RedBlackTree: duplicate insertions" {
     try std.testing.expectEqual(@as(usize, 1), tree.count());
 }
 
-test "RedBlackTree: sequential insertion" {
+test "RedBlackTreeSet: sequential insertion" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -610,9 +610,9 @@ test "RedBlackTree: sequential insertion" {
     }
 }
 
-test "RedBlackTree: reverse insertion" {
+test "RedBlackTreeSet: reverse insertion" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     var i: i32 = 50;
@@ -624,9 +624,9 @@ test "RedBlackTree: reverse insertion" {
     try std.testing.expect(tree.root.?.color == .black);
 }
 
-test "RedBlackTree: remove from middle" {
+test "RedBlackTreeSet: remove from middle" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(10);
@@ -643,9 +643,9 @@ test "RedBlackTree: remove from middle" {
     try std.testing.expect(tree.contains(7));
 }
 
-test "RedBlackTree: remove root" {
+test "RedBlackTreeSet: remove root" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(10);
@@ -658,9 +658,9 @@ test "RedBlackTree: remove root" {
     try std.testing.expect(tree.root.?.color == .black);
 }
 
-test "RedBlackTree: minimum and maximum" {
+test "RedBlackTreeSet: minimum and maximum" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(10);
@@ -678,9 +678,9 @@ test "RedBlackTree: minimum and maximum" {
     try std.testing.expectEqual(@as(i32, 20), max.?.data);
 }
 
-test "RedBlackTree: iterator empty tree" {
+test "RedBlackTreeSet: iterator empty tree" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     var iter = try tree.iterator();
@@ -690,9 +690,9 @@ test "RedBlackTree: iterator empty tree" {
     try std.testing.expect(node == null);
 }
 
-test "RedBlackTree: clear" {
+test "RedBlackTreeSet: clear" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(1);
@@ -704,9 +704,9 @@ test "RedBlackTree: clear" {
     try std.testing.expect(tree.root == null);
 }
 
-test "RedBlackTree: negative numbers" {
+test "RedBlackTreeSet: negative numbers" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(-10);
@@ -719,9 +719,9 @@ test "RedBlackTree: negative numbers" {
     try std.testing.expect(tree.contains(0));
 }
 
-test "RedBlackTree: get returns correct node" {
+test "RedBlackTreeSet: get returns correct node" {
     const allocator = std.testing.allocator;
-    var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
+    var tree = RedBlackTreeSet(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
     try tree.put(10);

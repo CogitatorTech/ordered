@@ -1,7 +1,7 @@
 const std = @import("std");
 const ordered = @import("ordered");
 
-// Context object for comparison. This is needed by RedBlackTree
+// Context object for comparison. This is needed by RedBlackTreeSet
 const I32Context = struct {
     // This function must be public to be visible from the library code.
     pub fn lessThan(_: @This(), a: i32, b: i32) bool {
@@ -12,8 +12,8 @@ const I32Context = struct {
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    std.debug.print("## RedBlackTree Example (as a Set) ##\n", .{});
-    var rbt = ordered.RedBlackTree(i32, I32Context).init(allocator, .{});
+    std.debug.print("## RedBlackTreeSet Example (as a Set) ##\n", .{});
+    var rbt = ordered.RedBlackTreeSet(i32, I32Context).init(allocator, .{});
     defer rbt.deinit();
 
     try rbt.put(40);

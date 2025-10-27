@@ -16,33 +16,51 @@
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/CogitatorTech/ordered/blob/main/LICENSE)
 
-Pure Zig implementations of high-performance, memory-safe ordered data structures
+A sorted collection library for Zig
 
 </div>
 
 ---
 
-Ordered is a Zig library that provides efficient implementations of various popular data structures including
-B-tree, skip list, trie, and red-black tree for Zig programming language.
+Ordered is a Zig library that provides fast and efficient implementations of various data structures that keep elements
+sorted (AKA sorted collections).
+It is written in pure Zig and has no external dependencies.
+Ordered is inspired by [Java collections](https://en.wikipedia.org/wiki/Java_collections_framework) and sorted
+containers in the [C++ standard library](https://en.cppreference.com/w/cpp/container), and aims to provide a similar
+experience in Zig.
 
 ### Features
 
-To be added.
+- Simple and uniform API for all data structures
+- Pure Zig implementations with no external dependencies
+- Fast and memory-efficient implementations (see [benches](benches))
 
 ### Data Structures
 
-| Data Structure                                                         | Build Complexity | Memory Complexity | Search Complexity |  
-|------------------------------------------------------------------------|------------------|-------------------|-------------------|
-| [B-tree](https://en.wikipedia.org/wiki/B-tree)                         | $O(\log n)$      | $O(n)$            | $O(\log n)$       |  
-| [Cartesian tree](https://en.wikipedia.org/wiki/Cartesian_tree)         | $O(\log n)$\*    | $O(n)$            | $O(\log n)$\*     |  
-| [Red-black tree](https://en.wikipedia.org/wiki/Red%E2%80%93black_tree) | $O(\log n)$      | $O(n)$            | $O(\log n)$       |  
-| [Skip list](https://en.wikipedia.org/wiki/Skip_list)                   | $O(\log n)$\*    | $O(n)$            | $O(\log n)$\*     |  
-| Sorted set                                                             | $O(n)$           | $O(n)$            | $O(\log n)$       |
-| [Trie](https://en.wikipedia.org/wiki/Trie)                             | $O(m)$           | $O(n \cdot m)$    | $O(m)$            |  
+Ordered provides two main interfaces for working with sorted collections: sorted maps and sorted sets.
+At the moment, Ordered supports the following implementations of these interfaces:
 
-- $n$: number of stored elements
-- $m$: maximum length of a key
-- \*: average case complexity
+#### Maps (Key-value)
+
+| Type               | Data Structure                                       | Insert       | Search       | Delete       | Space          |
+|--------------------|------------------------------------------------------|--------------|--------------|--------------|----------------|
+| `BTreeMap`         | [B-tree](https://en.wikipedia.org/wiki/B-tree)       | $O(\log n)$  | $O(\log n)$  | $O(\log n)$  | $O(n)$         |
+| `SkipListMap`      | [Skip list](https://en.wikipedia.org/wiki/Skip_list) | $O(\log n)$† | $O(\log n)$† | $O(\log n)$† | $O(n)$         |
+| `TrieMap`          | [Trie](https://en.wikipedia.org/wiki/Trie)           | $O(m)$       | $O(m)$       | $O(m)$       | $O(n \cdot m)$ |
+| `CartesianTreeMap` | [Treap](https://en.wikipedia.org/wiki/Treap)         | $O(\log n)$† | $O(\log n)$† | $O(\log n)$† | $O(n)$         |
+
+#### Sets (Value-only)
+
+| Type              | Data Structure                                                 | Insert      | Search      | Delete      | Space  |
+|-------------------|----------------------------------------------------------------|-------------|-------------|-------------|--------|
+| `SortedSet`       | [Sorted array](https://en.wikipedia.org/wiki/Sorted_array)     | $O(n)$      | $O(\log n)$ | $O(n)$      | $O(n)$ |
+| `RedBlackTreeSet` | [Red-black tree](https://en.wikipedia.org/wiki/Red-black_tree) | $O(\log n)$ | $O(\log n)$ | $O(\log n)$ | $O(n)$ |
+
+- $n$ = number of elements stored
+- $m$ = length of the key (for string-based keys)
+- † = average case complexity (the worst case is $O(n)$)
+
+See the [ROADMAP.md](ROADMAP.md) for the list of implemented and planned features.
 
 > [!IMPORTANT]
 > Ordered is in early development, so bugs and breaking API changes are expected.
@@ -52,7 +70,91 @@ To be added.
 
 ### Getting Started
 
-To be added.
+You can add Ordered to your project and start using it by following the steps below.
+
+#### Installation
+
+Run the following command in the root directory of your project to download Ordered:
+
+```sh
+zig fetch --save=ordered "https://github.com/CogitatorTech/ordered/archive/<branch_or_tag>.tar.gz"
+```
+
+Replace `<branch_or_tag>` with the desired branch or release tag, like `main` (for the development version) or `v0.1.0`.
+This command will download Ordered and add it to Zig's global cache and update your project's `build.zig.zon` file.
+
+#### Adding to Build Script
+
+Next, modify your `build.zig` file to make Ordered available to your build target as a module.
+
+```zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    // 1. Get the dependency object from the builder
+    const ordered_dep = b.dependency("ordered", .{});
+
+    // 2. Create a module for the dependency
+    const ordered_module = ordered_dep.module("ordered");
+
+    // 3. Create your executable module and add ordered as import
+    const exe_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_module.addImport("ordered", ordered_module);
+
+    // 4. Create executable with the module
+    const exe = b.addExecutable(.{
+        .name = "your-application",
+        .root_module = exe_module,
+    });
+
+    b.installArtifact(exe);
+}
+```
+
+#### Using Ordered in Your Project
+
+Finally, you can `@import("ordered")` and start using it in your Zig code.
+
+```zig
+const std = @import("std");
+const ordered = @import("ordered");
+
+// Define a comparison function for the keys.
+// The function must return a `std.math.Order` value based on the comparison of the two keys
+fn strCompare(lhs: []const u8, rhs: []const u8) std.math.Order {
+    return std.mem.order(u8, lhs, rhs);
+}
+
+pub fn main() !void {
+    const allocator = std.heap.page_allocator;
+
+    std.debug.print("## BTreeMap Example ##\n", .{});
+    const B = 4; // Branching Factor for B-tree
+    var map = ordered.BTreeMap([]const u8, u32, strCompare, B).init(allocator);
+    defer map.deinit();
+
+    try map.put("banana", 150);
+    try map.put("apple", 100);
+    try map.put("cherry", 200);
+
+    const key_to_find = "apple";
+    if (map.get(key_to_find)) |value_ptr| {
+        std.debug.print("Found key '{s}': value is {d}\n", .{ key_to_find, value_ptr.* });
+    }
+
+    const removed = map.remove("banana");
+    std.debug.print("Removed 'banana' with value: {?d}\n", .{if (removed) |v| v else null});
+    std.debug.print("Contains 'banana' after remove? {any}\n", .{map.contains("banana")});
+    std.debug.print("Map count: {d}\n\n", .{map.count()});
+}
+```
 
 ---
 
@@ -70,7 +172,7 @@ Check out the [examples](examples) directory for example usages of Ordered.
 
 ### Benchmarks
 
-To be added.
+Check out the [benchmarks](benches) directory for local benchmarks.
 
 ---
 

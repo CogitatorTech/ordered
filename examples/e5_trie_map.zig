@@ -4,8 +4,8 @@ const ordered = @import("ordered");
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    std.debug.print("## Trie Example ##\n", .{});
-    var trie = try ordered.Trie([]const u8).init(allocator);
+    std.debug.print("## TrieMap Example ##\n", .{});
+    var trie = try ordered.TrieMap([]const u8).init(allocator);
     defer trie.deinit();
 
     try trie.put("cat", "feline");
@@ -14,7 +14,7 @@ pub fn main() !void {
     try trie.put("care", "to look after");
     try trie.put("careful", "cautious");
 
-    std.debug.print("Trie count: {d}\n", .{trie.count()});
+    std.debug.print("TrieMap count: {d}\n", .{trie.count()});
 
     if (trie.get("car")) |value_ptr| {
         std.debug.print("Found 'car': {s}\n", .{value_ptr.*});

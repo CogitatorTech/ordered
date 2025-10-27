@@ -9,7 +9,7 @@ pub fn main() !void {
 
     std.debug.print("=== Trie Benchmark ===\n\n", .{});
 
-    const sizes = [_]usize{ 1000, 10_000, 50_000 };
+    const sizes = [_]usize{ 1000, 10_000, 100_000, 1_000_000 };
 
     inline for (sizes) |size| {
         try benchmarkPut(allocator, size);
@@ -25,7 +25,7 @@ fn generateKey(allocator: std.mem.Allocator, i: usize) ![]u8 {
 }
 
 fn benchmarkPut(allocator: std.mem.Allocator, size: usize) !void {
-    var trie = try ordered.Trie(i32).init(allocator);
+    var trie = try ordered.TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -52,7 +52,7 @@ fn benchmarkPut(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkGet(allocator: std.mem.Allocator, size: usize) !void {
-    var trie = try ordered.Trie(i32).init(allocator);
+    var trie = try ordered.TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -87,7 +87,7 @@ fn benchmarkGet(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkContains(allocator: std.mem.Allocator, size: usize) !void {
-    var trie = try ordered.Trie(i32).init(allocator);
+    var trie = try ordered.TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -122,7 +122,7 @@ fn benchmarkContains(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkPrefixSearch(allocator: std.mem.Allocator, size: usize) !void {
-    var trie = try ordered.Trie(i32).init(allocator);
+    var trie = try ordered.TrieMap(i32).init(allocator);
     defer trie.deinit();
 
     var arena = std.heap.ArenaAllocator.init(allocator);
