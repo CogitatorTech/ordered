@@ -77,14 +77,28 @@ pub fn BTreeMap(
             return null;
         }
 
+        /// Retrieves a mutable pointer to the value associated with `key`.
+        pub fn getPtr(self: *Self, key: K) ?*V {
+            var current = self.root;
+            while (current) |node| {
+                const res = std.sort.binarySearch(K, node.keys[0..node.len], key, compareFn);
+                if (res) |index| return &node.values[index];
+
+                if (node.is_leaf) return null;
+
+                const insertion_point = std.sort.lowerBound(K, node.keys[0..node.len], key, compareFn);
+                current = node.children[insertion_point];
+            }
+            return null;
+        }
+
+        /// Returns true if the map contains the given key.
+        pub fn contains(self: *const Self, key: K) bool {
+            return self.get(key) != null;
+        }
+
         /// Inserts a key-value pair. If the key exists, the value is updated.
         pub fn put(self: *Self, key: K, value: V) !void {
-            // Check if key exists and just update the value in place
-            if (self.get(key) != null) {
-                _ = self.remove(key);
-                // Don't increment len here, it will be incremented below
-            }
-
             var root_node = if (self.root) |r| r else {
                 const new_node = try self.createNode();
                 new_node.keys[0] = key;
@@ -104,8 +118,10 @@ pub fn BTreeMap(
                 root_node = new_root;
             }
 
-            self.insertNonFull(root_node, key, value);
-            self.len += 1;
+            const is_new = self.insertNonFull(root_node, key, value);
+            if (is_new) {
+                self.len += 1;
+            }
         }
 
         fn splitChild(self: *Self, parent: *Node, index: u16) void {
@@ -153,9 +169,20 @@ pub fn BTreeMap(
             parent.len += 1;
         }
 
-        fn insertNonFull(self: *Self, node: *Node, key: K, value: V) void {
+        fn insertNonFull(self: *Self, node: *Node, key: K, value: V) bool {
             var i = node.len;
             if (node.is_leaf) {
+                // Check if key already exists
+                var j: u16 = 0;
+                while (j < node.len) : (j += 1) {
+                    if (compare(key, node.keys[j]) == .eq) {
+                        // Update existing value
+                        node.values[j] = value;
+                        return false; // Not a new insertion
+                    }
+                }
+
+                // Insert new key
                 while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {
                     node.keys[i] = node.keys[i - 1];
                     node.values[i] = node.values[i - 1];
@@ -163,7 +190,18 @@ pub fn BTreeMap(
                 node.keys[i] = key;
                 node.values[i] = value;
                 node.len += 1;
+                return true; // New insertion
             } else {
+                // Check if key exists in current node
+                var j: u16 = 0;
+                while (j < node.len) : (j += 1) {
+                    if (compare(key, node.keys[j]) == .eq) {
+                        // Update existing value
+                        node.values[j] = value;
+                        return false; // Not a new insertion
+                    }
+                }
+
                 while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {}
                 if (node.children[i].?.len == BRANCHING_FACTOR - 1) {
                     self.splitChild(node, i);
@@ -171,7 +209,7 @@ pub fn BTreeMap(
                         i += 1;
                     }
                 }
-                self.insertNonFull(node.children[i].?, key, value);
+                return self.insertNonFull(node.children[i].?, key, value);
             }
         }
 
@@ -227,18 +265,23 @@ pub fn BTreeMap(
                 const pred = self.getPredecessor(node, index);
                 node.keys[index] = pred.key;
                 node.values[index] = pred.value;
+                // deleteFromNode already decremented self.len, so increment it back
+                // because we're replacing, not actually removing
+                const old_len = self.len;
                 _ = self.deleteFromNode(node.children[index].?, pred.key);
-                self.len += 1;
+                self.len = old_len;
             } else if (node.children[index + 1].?.len > MIN_KEYS) {
                 const succ = self.getSuccessor(node, index);
                 node.keys[index] = succ.key;
                 node.values[index] = succ.value;
+                const old_len = self.len;
                 _ = self.deleteFromNode(node.children[index + 1].?, succ.key);
-                self.len += 1;
+                self.len = old_len;
             } else {
                 self.merge(node, index);
+                const old_len = self.len;
                 _ = self.deleteFromNode(node.children[index].?, key);
-                self.len += 1;
+                self.len = old_len;
             }
         }
 

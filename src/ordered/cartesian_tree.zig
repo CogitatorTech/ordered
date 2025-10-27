@@ -220,12 +220,12 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             stack: std.ArrayList(*Node),
             allocator: Allocator,
 
-            pub fn init(allocator: Allocator, root: ?*Node) Iterator {
+            pub fn init(allocator: Allocator, root: ?*Node) !Iterator {
                 var it = Iterator{
-                    .stack = .{},
+                    .stack = std.ArrayList(*Node){},
                     .allocator = allocator,
                 };
-                it.pushLeft(root);
+                try it.pushLeft(root);
                 return it;
             }
 
@@ -233,23 +233,23 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
                 self.stack.deinit(self.allocator);
             }
 
-            fn pushLeft(self: *Iterator, node: ?*Node) void {
+            fn pushLeft(self: *Iterator, node: ?*Node) !void {
                 var current = node;
                 while (current) |n| {
-                    self.stack.append(self.allocator, n) catch return; // Handle potential allocation failure
+                    try self.stack.append(self.allocator, n);
                     current = n.left;
                 }
             }
 
             // src/cartesian_tree.zig
 
-            pub fn next(self: *Iterator) ?struct { key: K, value: V } {
+            pub fn next(self: *Iterator) !?struct { key: K, value: V } {
                 // self.stack.pop() returns `?*Node`.
                 // The `if` statement correctly handles the optional, unwrapping it into `node`.
                 if (self.stack.pop()) |node| {
                     // 'node' is now a valid `*Node` pointer.
                     if (node.right) |right_node| {
-                        self.pushLeft(right_node);
+                        try self.pushLeft(right_node);
                     }
                     return .{ .key = node.key, .value = node.value };
                 } else {
@@ -259,7 +259,7 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
         };
 
         /// Create iterator for in-order traversal
-        pub fn iterator(self: *const Self, allocator: Allocator) Iterator {
+        pub fn iterator(self: *const Self, allocator: Allocator) !Iterator {
             return Iterator.init(allocator, self.root);
         }
     };
@@ -424,14 +424,14 @@ test "CartesianTree: iterator traversal" {
     try tree.putWithPriority(20, 20, 20);
     try tree.putWithPriority(5, 5, 5);
 
-    var iter = tree.iterator(testing.allocator);
+    var iter = try tree.iterator(testing.allocator);
     defer iter.deinit();
 
     // Should iterate in sorted key order (BST property)
     const expected = [_]i32{ 5, 10, 20, 30 };
     var idx: usize = 0;
 
-    while (iter.next()) |entry| : (idx += 1) {
+    while (try iter.next()) |entry| : (idx += 1) {
         try testing.expectEqual(expected[idx], entry.key);
     }
     try testing.expectEqual(@as(usize, 4), idx);
