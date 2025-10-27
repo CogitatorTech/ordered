@@ -33,7 +33,7 @@ experience in Zig.
 
 - Simple and uniform API for all data structures
 - Pure Zig implementations with no external dependencies
-- Fast and memory-efficient implementations (see [benches](benches))
+- Fast, cache-friendly, and memory-efficient implementations (see [benches](benches))
 
 ### Data Structures
 
