@@ -35,7 +35,6 @@ const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const assert = std.debug.assert;
 
-
 /// Creates a Red-Black Tree type for the given data type and comparison context.
 ///
 /// ## Parameters

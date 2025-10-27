@@ -7,26 +7,27 @@
 <h2>Ordered</h2>
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/tests.yml?label=tests&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/tests.yml)
-[![Benchmarks](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/benches.yml?label=benches&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/benches.yml)
+[![Benchmarks](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/benches.yml?label=benchmarks&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/benches.yml)
 [![CodeFactor](https://img.shields.io/codefactor/grade/github/CogitatorTech/ordered?label=quality&style=flat&labelColor=282c34&logo=codefactor)](https://www.codefactor.io/repository/github/CogitatorTech/ordered)
+[![Zig Version](https://img.shields.io/badge/Zig-0.15.2-orange?logo=zig&labelColor=282c34)](https://ziglang.org/download/)
+<br>
 [![Docs](https://img.shields.io/badge/docs-view-blue?style=flat&labelColor=282c34&logo=read-the-docs)](https://CogitatorTech.github.io/ordered/)
 [![Examples](https://img.shields.io/badge/examples-view-green?style=flat&labelColor=282c34&logo=zig)](https://github.com/CogitatorTech/ordered/tree/main/examples)
-[![Zig Version](https://img.shields.io/badge/Zig-0.15.2-orange?logo=zig&labelColor=282c34)](https://ziglang.org/download/)
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/CogitatorTech/ordered/blob/main/LICENSE)
 
-A collection of data structures that keep data in order in pure Zig
+Pure Zig implementations of high-performance, memory-safe ordered data structures
 
 </div>
 
 ---
 
-Ordered is a Zig library that provides fast and efficient implementations of various popular data structures including
+Ordered is a Zig library that provides efficient implementations of various popular data structures including
 B-tree, skip list, trie, and red-black tree for Zig programming language.
 
 ### Features
 
-- Fast and efficient implementations
+To be added.
 
 ### Data Structures
 
@@ -66,6 +67,10 @@ and view in a web browser.
 ### Examples
 
 Check out the [examples](examples) directory for example usages of Ordered.
+
+### Benchmarks
+
+To be added.
 
 ---
 
