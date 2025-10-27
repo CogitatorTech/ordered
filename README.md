@@ -16,18 +16,24 @@
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/CogitatorTech/ordered/blob/main/LICENSE)
 
-Pure Zig implementations of high-performance, memory-safe ordered data structures
+A collection of data structures that keep data sorted by key in pure Zig
 
 </div>
 
 ---
 
-Ordered is a Zig library that provides efficient implementations of various popular data structures including
-B-tree, skip list, trie, and red-black tree for Zig programming language.
+Ordered is a Zig library that provides efficient implementations of various useful data structures
+like the sorted map, sorted set, trie, and red-black tree.
+A common application these data structures is storing and managing data in a way that keeps it sorted based on
+values of keys.
+This in turn normally gives these data structures the property that they can be used for fast lookups and cache-friendly
+data access.
 
 ### Features
 
-To be added.
+- Simple and uniform API for all data structures
+- Pure Zig implementations with no external dependencies
+- Fast and memory-efficient implementations (see [beches](benches))
 
 ### Data Structures
 
@@ -52,7 +58,91 @@ To be added.
 
 ### Getting Started
 
-To be added.
+You can add Ordered to your project and start using it by following the steps below.
+
+#### Installation
+
+Run the following command in the root directory of your project to download Ordered:
+
+```sh
+zig fetch --save=ordered "https://github.com/CogitatorTech/ordered/archive/<branch_or_tag>.tar.gz"
+```
+
+Replace `<branch_or_tag>` with the desired branch or release tag, like `main` (for the development version) or `v0.1.0`.
+This command will download Ordered and add it to Zig's global cache and update your project's `build.zig.zon` file.
+
+#### Adding to Build Script
+
+Next, modify your `build.zig` file to make Ordered available to your build target as a module.
+
+```zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    // 1. Get the dependency object from the builder
+    const ordered_dep = b.dependency("ordered", .{});
+
+    // 2. Create a module for the dependency
+    const ordered_module = ordered_dep.module("ordered");
+
+    // 3. Create your executable module and add ordered as import
+    const exe_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_module.addImport("ordered", ordered_module);
+
+    // 4. Create executable with the module
+    const exe = b.addExecutable(.{
+        .name = "your-application",
+        .root_module = exe_module,
+    });
+
+    b.installArtifact(exe);
+}
+```
+
+#### Using Ordered in Your Project
+
+Finally, you can `@import("ordered")` and start using it in your Zig code.
+
+```zig
+const std = @import("std");
+const ordered = @import("ordered");
+
+// Define a comparison function for the keys.
+// The function must return a `std.math.Order` value based on the comparison of the two keys
+fn strCompare(lhs: []const u8, rhs: []const u8) std.math.Order {
+    return std.mem.order(u8, lhs, rhs);
+}
+
+pub fn main() !void {
+    const allocator = std.heap.page_allocator;
+
+    std.debug.print("## BTreeMap Example ##\n", .{});
+    const B = 4; // Branching Factor for B-tree
+    var map = ordered.BTreeMap([]const u8, u32, strCompare, B).init(allocator);
+    defer map.deinit();
+
+    try map.put("banana", 150);
+    try map.put("apple", 100);
+    try map.put("cherry", 200);
+
+    const key_to_find = "apple";
+    if (map.get(key_to_find)) |value_ptr| {
+        std.debug.print("Found key '{s}': value is {d}\n", .{ key_to_find, value_ptr.* });
+    }
+
+    const removed = map.remove("banana");
+    std.debug.print("Removed 'banana' with value: {?d}\n", .{if (removed) |v| v else null});
+    std.debug.print("Contains 'banana' after remove? {any}\n", .{map.contains("banana")});
+    std.debug.print("Map count: {d}\n\n", .{map.count()});
+}
+```
 
 ---
 
@@ -70,7 +160,7 @@ Check out the [examples](examples) directory for example usages of Ordered.
 
 ### Benchmarks
 
-To be added.
+Check out the [benchmarks](benches) directory for local benchmarks.
 
 ---
 

@@ -356,7 +356,7 @@ pub fn Trie(comptime V: type) type {
                 self.current_key.deinit(self.allocator);
             }
 
-            pub fn next(self: *Iterator) ?struct { key: []const u8, value: V } {
+            pub fn next(self: *Iterator) !?struct { key: []const u8, value: V } {
                 while (self.stack.items.len > 0) {
                     var frame = &self.stack.items[self.stack.items.len - 1];
 
@@ -369,13 +369,13 @@ pub fn Trie(comptime V: type) type {
                         const char = entry.key_ptr.*;
                         const child = entry.value_ptr.*;
 
-                        self.current_key.append(self.allocator, char) catch return null;
+                        try self.current_key.append(self.allocator, char);
 
-                        self.stack.append(self.allocator, IteratorFrame{
+                        try self.stack.append(self.allocator, IteratorFrame{
                             .node = child,
                             .child_iter = child.children.iterator(),
                             .visited_self = false,
-                        }) catch return null;
+                        });
                     } else {
                         _ = self.stack.pop();
                         if (self.current_key.items.len > 0) {

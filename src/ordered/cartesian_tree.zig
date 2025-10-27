@@ -217,14 +217,14 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
 
         /// Retrieves a mutable pointer to the value associated with the given key.
         ///
-        /// Returns `null` if the key doesn't exist. Allows in-place modification of the value.
+        /// Returns a mutable pointer to the value associated with the given key.
         ///
         /// Time complexity: O(log n) expected
         pub fn getPtr(self: *Self, key: K) ?*V {
-            return self.getNodePtr(self.root, key);
+            return Self.getNodePtr(self.root, key);
         }
 
-        fn getNodePtr(_: *Self, root: ?*Node, key: K) ?*V {
+        fn getNodePtr(root: ?*Node, key: K) ?*V {
             if (root == null) return null;
 
             const node = root.?;
@@ -232,8 +232,8 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
 
             return switch (key_cmp) {
                 .eq => &node.value,
-                .lt => getNodePtr(undefined, node.left, key),
-                .gt => getNodePtr(undefined, node.right, key),
+                .lt => getNodePtr(node.left, key),
+                .gt => getNodePtr(node.right, key),
             };
         }
 

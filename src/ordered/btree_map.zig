@@ -210,19 +210,19 @@ pub fn BTreeMap(
                 new_root.is_leaf = false;
                 new_root.children[0] = root_node;
                 self.root = new_root;
-                self.splitChild(new_root, 0);
+                try self.splitChild(new_root, 0);
                 root_node = new_root;
             }
 
-            const is_new = self.insertNonFull(root_node, key, value);
+            const is_new = try self.insertNonFull(root_node, key, value);
             if (is_new) {
                 self.len += 1;
             }
         }
 
-        fn splitChild(self: *Self, parent: *Node, index: u16) void {
+        fn splitChild(self: *Self, parent: *Node, index: u16) !void {
             const child = parent.children[index].?;
-            const new_sibling = self.createNode() catch @panic("OOM");
+            const new_sibling = try self.createNode();
             new_sibling.is_leaf = child.is_leaf;
 
             const t = MIN_KEYS;
@@ -265,7 +265,7 @@ pub fn BTreeMap(
             parent.len += 1;
         }
 
-        fn insertNonFull(self: *Self, node: *Node, key: K, value: V) bool {
+        fn insertNonFull(self: *Self, node: *Node, key: K, value: V) !bool {
             var i = node.len;
             if (node.is_leaf) {
                 // Check if key already exists
@@ -300,12 +300,12 @@ pub fn BTreeMap(
 
                 while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {}
                 if (node.children[i].?.len == BRANCHING_FACTOR - 1) {
-                    self.splitChild(node, i);
+                    try self.splitChild(node, i);
                     if (compare(node.keys[i], key) == .lt) {
                         i += 1;
                     }
                 }
-                return self.insertNonFull(node.children[i].?, key, value);
+                return try self.insertNonFull(node.children[i].?, key, value);
             }
         }
 

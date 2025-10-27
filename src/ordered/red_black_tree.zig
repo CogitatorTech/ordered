@@ -118,7 +118,7 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         /// Returns the number of elements in the tree.
         ///
         /// Time complexity: O(1)
-        pub fn count(self: Self) usize {
+        pub fn count(self: *const Self) usize {
             return self.size;
         }
 
@@ -428,7 +428,7 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         /// to access or modify the data directly.
         ///
         /// Time complexity: O(log n)
-        pub fn get(self: Self, data: T) ?*Node {
+        pub fn get(self: *const Self, data: T) ?*Node {
             var current = self.root;
 
             while (current) |node| {
@@ -447,11 +447,11 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         /// Checks whether the tree contains the given value.
         ///
         /// Time complexity: O(log n)
-        pub fn contains(self: Self, data: T) bool {
+        pub fn contains(self: *const Self, data: T) bool {
             return self.get(data) != null;
         }
 
-        fn findMinimum(self: Self, node: *Node) *Node {
+        fn findMinimum(self: *const Self, node: *Node) *Node {
             _ = self; // Mark as intentionally unused
             var current = node;
             while (current.left) |left| {
@@ -516,7 +516,7 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             }
         };
 
-        pub fn iterator(self: Self) !Iterator {
+        pub fn iterator(self: *const Self) !Iterator {
             return Iterator.init(self.allocator, self.root);
         }
     };
