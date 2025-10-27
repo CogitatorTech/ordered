@@ -36,7 +36,7 @@ const testing = std.testing;
 const Allocator = std.mem.Allocator;
 const Order = std.math.Order;
 
-pub fn CartesianTree(comptime K: type, comptime V: type) type {
+pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
     return struct {
         const Self = @This();
 
@@ -357,8 +357,8 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
     };
 }
 
-test "CartesianTree basic operations" {
-    var tree = CartesianTree(i32, []const u8).init(testing.allocator);
+test "CartesianTreeMap basic operations" {
+    var tree = CartesianTreeMap(i32, []const u8).init(testing.allocator);
     defer tree.deinit();
 
     // Test insertion and retrieval
@@ -386,8 +386,8 @@ test "CartesianTree basic operations" {
     try testing.expect(!tree.contains(3));
 }
 
-test "CartesianTree: empty tree operations" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: empty tree operations" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     try testing.expect(tree.isEmpty());
@@ -397,8 +397,8 @@ test "CartesianTree: empty tree operations" {
     try testing.expect(tree.remove(42) == null);
 }
 
-test "CartesianTree: single element" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: single element" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(42, 100, 50);
@@ -411,8 +411,8 @@ test "CartesianTree: single element" {
     try testing.expect(tree.root == null);
 }
 
-test "CartesianTree: priority ordering" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: priority ordering" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     // Higher priority should be closer to root
@@ -424,8 +424,8 @@ test "CartesianTree: priority ordering" {
     try testing.expectEqual(@as(i32, 10), tree.root.?.key);
 }
 
-test "CartesianTree: update existing key with different priority" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: update existing key with different priority" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(10, 100, 50);
@@ -435,8 +435,8 @@ test "CartesianTree: update existing key with different priority" {
     try testing.expectEqual(@as(i32, 200), tree.get(10).?);
 }
 
-test "CartesianTree: random priorities with put" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: random priorities with put" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     // Using put which generates random priorities
@@ -450,8 +450,8 @@ test "CartesianTree: random priorities with put" {
     try testing.expectEqual(@as(i32, 3), tree.get(3).?);
 }
 
-test "CartesianTree: sequential keys" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: sequential keys" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -467,8 +467,8 @@ test "CartesianTree: sequential keys" {
     }
 }
 
-test "CartesianTree: remove non-existent key" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: remove non-existent key" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(10, 10, 10);
@@ -479,8 +479,8 @@ test "CartesianTree: remove non-existent key" {
     try testing.expectEqual(@as(usize, 2), tree.count());
 }
 
-test "CartesianTree: remove all elements" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: remove all elements" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(1, 1, 1);
@@ -495,8 +495,8 @@ test "CartesianTree: remove all elements" {
     try testing.expect(tree.get(2) == null);
 }
 
-test "CartesianTree: negative keys" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: negative keys" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(-10, 10, 100);
@@ -508,8 +508,8 @@ test "CartesianTree: negative keys" {
     try testing.expectEqual(@as(i32, -5), tree.get(5).?);
 }
 
-test "CartesianTree: iterator traversal" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: iterator traversal" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(30, 30, 30);
@@ -530,8 +530,8 @@ test "CartesianTree: iterator traversal" {
     try testing.expectEqual(@as(usize, 4), idx);
 }
 
-test "CartesianTree: large dataset" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: large dataset" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -547,8 +547,8 @@ test "CartesianTree: large dataset" {
     }
 }
 
-test "CartesianTree: same priorities different keys" {
-    var tree = CartesianTree(i32, i32).init(testing.allocator);
+test "CartesianTreeMap: same priorities different keys" {
+    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
     defer tree.deinit();
 
     // When priorities are equal, BST property still maintained by key

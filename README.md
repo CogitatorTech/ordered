@@ -16,18 +16,17 @@
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/CogitatorTech/ordered/blob/main/LICENSE)
 
-A collection of data structures that keep data sorted by key in pure Zig
+A sorted collection library for Zig
 
 </div>
 
 ---
 
 Ordered is a Zig library that provides efficient implementations of various useful data structures
-like the sorted map, sorted set, trie, and red-black tree.
-A common application these data structures is storing and managing data in a way that keeps it sorted based on
-values of keys.
-This in turn normally gives these data structures the property that they can be used for fast lookups and cache-friendly
-data access.
+like sorted maps and sorted sets that keep elements sorted based on some value.
+It is written in pure Zig and has no external dependencies.
+It is inspired by [Java Collections](https://en.wikipedia.org/wiki/Java_collections_framework) and sorted containers in
+the [C++ standard library](https://en.cppreference.com/w/cpp/container).
 
 ### Features
 

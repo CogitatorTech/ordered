@@ -65,6 +65,13 @@ pub fn SortedSet(
             return self.items.orderedRemove(index);
         }
 
+        /// Removes a value from the set and returns it if it existed.
+        /// Returns null if the value was not found.
+        pub fn removeValue(self: *Self, value: T) ?T {
+            const index = self.findIndex(value) orelse return null;
+            return self.remove(index);
+        }
+
         /// Returns true if the vector contains the given value.
         pub fn contains(self: *Self, value: T) bool {
             return self.findIndex(value) != null;
@@ -192,4 +199,26 @@ test "SortedSet: remove boundary cases" {
     // Remove middle
     _ = vec.remove(1);
     try std.testing.expectEqualSlices(i32, &.{ 2, 4 }, vec.items.items);
+}
+
+test "SortedSet: removeValue method" {
+    const allocator = std.testing.allocator;
+    var vec = SortedSet(i32, i32Compare).init(allocator);
+    defer vec.deinit();
+
+    _ = try vec.put(10);
+    _ = try vec.put(20);
+    _ = try vec.put(30);
+    _ = try vec.put(40);
+
+    // Remove existing value
+    const removed = vec.removeValue(20);
+    try std.testing.expectEqual(@as(i32, 20), removed.?);
+    try std.testing.expectEqual(@as(usize, 3), vec.items.items.len);
+    try std.testing.expect(!vec.contains(20));
+
+    // Try to remove non-existent value
+    const not_found = vec.removeValue(99);
+    try std.testing.expect(not_found == null);
+    try std.testing.expectEqual(@as(usize, 3), vec.items.items.len);
 }
