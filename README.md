@@ -16,7 +16,7 @@
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/CogitatorTech/ordered/blob/main/LICENSE)
 
-A sorted collection library for Zig
+A sorted collection library (sorted sets and sorted maps) for Zig
 
 </div>
 
@@ -37,7 +37,7 @@ experience in Zig.
 
 ### Data Structures
 
-Ordered provides two main interfaces for working with sorted collections: sorted maps and sorted sets.
+Ordered provides two main interfaces for working with sorted collections: *sorted maps* and *sorted sets*.
 At the moment, Ordered supports the following implementations of these interfaces:
 
 #### Maps (key-value)
