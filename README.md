@@ -40,7 +40,7 @@ experience in Zig.
 Ordered provides two main interfaces for working with sorted collections: sorted maps and sorted sets.
 At the moment, Ordered supports the following implementations of these interfaces:
 
-#### Maps (Key-value)
+#### Maps (key-value)
 
 | Type               | Data Structure                                       | Insert       | Search       | Delete       | Space          |
 |--------------------|------------------------------------------------------|--------------|--------------|--------------|----------------|
@@ -49,7 +49,7 @@ At the moment, Ordered supports the following implementations of these interface
 | `TrieMap`          | [Trie](https://en.wikipedia.org/wiki/Trie)           | $O(m)$       | $O(m)$       | $O(m)$       | $O(n \cdot m)$ |
 | `CartesianTreeMap` | [Treap](https://en.wikipedia.org/wiki/Treap)         | $O(\log n)$† | $O(\log n)$† | $O(\log n)$† | $O(n)$         |
 
-#### Sets (Value-only)
+#### Sets (value-only)
 
 | Type              | Data Structure                                                 | Insert      | Search      | Delete      | Space  |
 |-------------------|----------------------------------------------------------------|-------------|-------------|-------------|--------|
