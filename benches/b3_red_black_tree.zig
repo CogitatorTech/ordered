@@ -36,7 +36,7 @@ fn benchmarkInsert(allocator: std.mem.Allocator, size: usize) !void {
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try tree.insert(i);
+        try tree.put(i);
     }
 
     const elapsed = timer.read() - start;
@@ -55,7 +55,7 @@ fn benchmarkFind(allocator: std.mem.Allocator, size: usize) !void {
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try tree.insert(i);
+        try tree.put(i);
     }
 
     var timer = try Timer.start();
@@ -64,7 +64,7 @@ fn benchmarkFind(allocator: std.mem.Allocator, size: usize) !void {
     i = 0;
     var found: usize = 0;
     while (i < size) : (i += 1) {
-        if (tree.find(i) != null) found += 1;
+        if (tree.get(i) != null) found += 1;
     }
 
     const elapsed = timer.read() - start;
@@ -84,7 +84,7 @@ fn benchmarkRemove(allocator: std.mem.Allocator, size: usize) !void {
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try tree.insert(i);
+        try tree.put(i);
     }
 
     var timer = try Timer.start();
@@ -111,7 +111,7 @@ fn benchmarkIterator(allocator: std.mem.Allocator, size: usize) !void {
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try tree.insert(i);
+        try tree.put(i);
     }
 
     var timer = try Timer.start();

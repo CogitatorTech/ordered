@@ -17,7 +17,7 @@ pub fn main() !void {
     try skip_list.put("mango", 250);
     try skip_list.put("banana", 150);
 
-    std.debug.print("SkipList length: {d}\n", .{skip_list.len});
+    std.debug.print("SkipList count: {d}\n", .{skip_list.count()});
 
     if (skip_list.get("mango")) |value_ptr| {
         std.debug.print("Found 'mango': value is {d}\n", .{value_ptr.*});
@@ -29,6 +29,7 @@ pub fn main() !void {
         std.debug.print("  {s}: {d}\n", .{ entry.key, entry.value });
     }
 
-    _ = skip_list.delete("apple");
-    std.debug.print("Contains 'apple' after delete? {any}\n\n", .{skip_list.contains("apple")});
+    const removed = skip_list.remove("apple");
+    std.debug.print("Removed 'apple' with value: {?d}\n", .{removed});
+    std.debug.print("Contains 'apple' after remove? {any}\n\n", .{skip_list.contains("apple")});
 }

@@ -144,14 +144,14 @@ fn benchmarkPrefixSearch(allocator: std.mem.Allocator, size: usize) !void {
 
     i = 0;
     while (i < num_searches) : (i += 1) {
-        var keys = try trie.keysWithPrefix(allocator, "key_");
-        defer {
-            for (keys.items) |key| {
-                allocator.free(key);
-            }
-            keys.deinit(allocator);
+        var iter = try trie.keysWithPrefix(allocator, "key_");
+        defer iter.deinit();
+
+        var count: usize = 0;
+        while (try iter.next()) |_| {
+            count += 1;
         }
-        total_found += keys.items.len;
+        total_found += count;
     }
 
     const elapsed = timer.read() - start;

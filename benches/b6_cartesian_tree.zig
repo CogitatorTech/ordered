@@ -110,11 +110,11 @@ fn benchmarkIterator(allocator: std.mem.Allocator, size: usize) !void {
     var timer = try Timer.start();
     const start = timer.lap();
 
-    var iter = tree.iterator(allocator);
+    var iter = try tree.iterator(allocator);
     defer iter.deinit();
 
     var count: usize = 0;
-    while (iter.next()) |_| {
+    while (try iter.next()) |_| {
         count += 1;
     }
 

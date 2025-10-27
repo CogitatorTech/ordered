@@ -2,6 +2,14 @@
 //! SkipList offers O(log n) performance on average and is simpler to implement
 //! correctly than balanced binary trees. It uses less memory per-node than B-Trees
 //! and has excellent concurrent-friendly properties.
+//!
+//! ## Thread Safety
+//! This implementation is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the skip list (via put/delete/clear) while iterating will
+//! cause undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
 
@@ -41,6 +49,11 @@ pub fn SkipList(
         allocator: std.mem.Allocator,
         rng: std.Random.DefaultPrng,
 
+        /// Returns the number of elements in the skip list.
+        pub fn count(self: *const Self) usize {
+            return self.len;
+        }
+
         pub fn init(allocator: std.mem.Allocator) !Self {
             const header = try allocator.create(Node);
             header.key = undefined;
@@ -60,15 +73,23 @@ pub fn SkipList(
         }
 
         pub fn deinit(self: *Self) void {
+            self.clear();
+            self.allocator.free(self.header.forward);
+            self.allocator.destroy(self.header);
+            self.* = undefined;
+        }
+
+        /// Removes all elements from the skip list.
+        pub fn clear(self: *Self) void {
             var current = self.header.forward[0];
             while (current) |node| {
                 const next = node.forward[0];
                 node.deinit(self.allocator);
                 current = next;
             }
-            self.allocator.free(self.header.forward);
-            self.allocator.destroy(self.header);
-            self.* = undefined;
+            @memset(self.header.forward, null);
+            self.level = 0;
+            self.len = 0;
         }
 
         fn randomLevel(self: *Self) u8 {
@@ -173,7 +194,7 @@ pub fn SkipList(
         }
 
         /// Removes a key-value pair and returns the value if it existed.
-        pub fn delete(self: *Self, key: K) ?V {
+        pub fn remove(self: *Self, key: K) ?V {
             var update: [MAX_LEVEL]?*Node = undefined;
             var current = self.header;
             var i = self.level;
@@ -269,7 +290,7 @@ test "SkipList: basic operations" {
     try std.testing.expectEqual(@as(usize, 4), list.len);
 
     // Test delete
-    const deleted = list.delete(20);
+    const deleted = list.remove(20);
     try std.testing.expectEqualStrings("twenty", deleted.?);
     try std.testing.expect(list.get(20) == null);
     try std.testing.expectEqual(@as(usize, 3), list.len);
@@ -327,7 +348,7 @@ test "SkipList: empty list operations" {
 
     try std.testing.expect(list.get(42) == null);
     try std.testing.expectEqual(@as(usize, 0), list.len);
-    try std.testing.expect(list.delete(42) == null);
+    try std.testing.expect(list.remove(42) == null);
     try std.testing.expect(!list.contains(42));
 }
 
@@ -340,7 +361,7 @@ test "SkipList: single element" {
     try std.testing.expectEqual(@as(usize, 1), list.len);
     try std.testing.expectEqual(@as(i32, 100), list.get(42).?.*);
 
-    const deleted = list.delete(42);
+    const deleted = list.remove(42);
     try std.testing.expectEqual(@as(i32, 100), deleted.?);
     try std.testing.expectEqual(@as(usize, 0), list.len);
 }
@@ -392,7 +413,7 @@ test "SkipList: delete non-existent" {
     try list.put(10, 10);
     try list.put(20, 20);
 
-    const deleted = list.delete(15);
+    const deleted = list.remove(15);
     try std.testing.expect(deleted == null);
     try std.testing.expectEqual(@as(usize, 2), list.len);
 }
@@ -406,9 +427,9 @@ test "SkipList: delete all elements" {
     try list.put(2, 2);
     try list.put(3, 3);
 
-    _ = list.delete(1);
-    _ = list.delete(2);
-    _ = list.delete(3);
+    _ = list.remove(1);
+    _ = list.remove(2);
+    _ = list.remove(3);
 
     try std.testing.expectEqual(@as(usize, 0), list.len);
     try std.testing.expect(list.get(2) == null);

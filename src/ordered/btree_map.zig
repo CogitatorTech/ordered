@@ -2,6 +2,14 @@
 //! This is a workhorse for most ordered map use cases. B-Trees are extremely
 //! cache-friendly due to their high branching factor, making them faster than
 //! binary search trees for larger datasets.
+//!
+//! ## Thread Safety
+//! This data structure is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the map (via put/remove/clear) while iterating will cause
+//! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
 
@@ -32,9 +40,21 @@ pub fn BTreeMap(
             return .{ .allocator = allocator };
         }
 
+        /// Returns the number of elements in the map.
+        pub fn count(self: *const Self) usize {
+            return self.len;
+        }
+
         pub fn deinit(self: *Self) void {
-            if (self.root) |r| self.deinitNode(r);
+            self.clear();
             self.* = undefined;
+        }
+
+        /// Removes all elements from the map.
+        pub fn clear(self: *Self) void {
+            if (self.root) |r| self.deinitNode(r);
+            self.root = null;
+            self.len = 0;
         }
 
         fn deinitNode(self: *Self, node: *Node) void {

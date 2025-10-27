@@ -1,6 +1,14 @@
 //! A Trie (prefix tree) data structure for efficient string storage and retrieval.
 //! Tries excel at prefix-based operations like autocomplete, word validation,
 //! and prefix matching. They provide O(m) complexity where m is the key length.
+//!
+//! ## Thread Safety
+//! This data structure is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the trie (via put/delete/clear) while iterating will cause
+//! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
 
@@ -35,6 +43,11 @@ pub fn Trie(comptime V: type) type {
         len: usize,
         allocator: std.mem.Allocator,
 
+        /// Returns the number of elements in the trie.
+        pub fn count(self: *const Self) usize {
+            return self.len;
+        }
+
         pub fn init(allocator: std.mem.Allocator) !Self {
             const root = try TrieNode.init(allocator);
             return Self{
@@ -47,6 +60,13 @@ pub fn Trie(comptime V: type) type {
         pub fn deinit(self: *Self) void {
             self.root.deinit(self.allocator);
             self.* = undefined;
+        }
+
+        /// Removes all elements from the trie.
+        pub fn clear(self: *Self) !void {
+            self.root.deinit(self.allocator);
+            self.root = try TrieNode.init(self.allocator);
+            self.len = 0;
         }
 
         pub fn put(self: *Self, key: []const u8, value: V) !void {
@@ -88,7 +108,8 @@ pub fn Trie(comptime V: type) type {
             return self.findNode(prefix) != null;
         }
 
-        pub fn delete(self: *Self, key: []const u8) ?V {
+        /// Removes a key and returns its value if it existed.
+        pub fn remove(self: *Self, key: []const u8) ?V {
             const result = self.deleteRecursive(self.root, key, 0);
             if (result.deleted) {
                 self.len -= 1;
@@ -153,34 +174,85 @@ pub fn Trie(comptime V: type) type {
             return current;
         }
 
-        pub fn keysWithPrefix(self: *const Self, allocator: std.mem.Allocator, prefix: []const u8) !std.ArrayList([]u8) {
-            var results: std.ArrayList([]u8) = .{};
-
-            const prefix_node = self.findNode(prefix) orelse return results;
-            try self.collectKeys(allocator, prefix_node, &results, prefix);
-
-            return results;
-        }
-
-        fn collectKeys(self: *const Self, allocator: std.mem.Allocator, node: *const TrieNode, results: *std.ArrayList([]u8), current_key: []const u8) !void {
-            if (node.is_end) {
-                const key_copy = try allocator.dupe(u8, current_key);
-                try results.append(allocator, key_copy);
+        /// Returns an iterator that yields all keys with the given prefix.
+        /// The iterator manages its own memory and will be automatically cleaned up on deinit.
+        pub fn keysWithPrefix(self: *const Self, allocator: std.mem.Allocator, prefix: []const u8) !PrefixIterator {
+            const prefix_node = self.findNode(prefix);
+            if (prefix_node == null) {
+                return PrefixIterator{
+                    .stack = std.ArrayList(PrefixIteratorFrame){},
+                    .allocator = allocator,
+                    .current_key = std.ArrayList(u8){},
+                    .prefix_len = 0,
+                };
             }
 
-            var iter = node.children.iterator();
-            while (iter.next()) |entry| {
-                const char = entry.key_ptr.*;
-                const child = entry.value_ptr.*;
+            var stack = std.ArrayList(PrefixIteratorFrame){};
+            try stack.append(allocator, PrefixIteratorFrame{
+                .node = prefix_node.?,
+                .child_iter = prefix_node.?.children.iterator(),
+                .visited_self = false,
+            });
 
-                var new_key = try allocator.alloc(u8, current_key.len + 1);
-                defer allocator.free(new_key);
-                @memcpy(new_key[0..current_key.len], current_key);
-                new_key[current_key.len] = char;
+            var current_key = std.ArrayList(u8){};
+            try current_key.appendSlice(allocator, prefix);
 
-                try self.collectKeys(allocator, child, results, new_key);
-            }
+            return PrefixIterator{
+                .stack = stack,
+                .allocator = allocator,
+                .current_key = current_key,
+                .prefix_len = prefix.len,
+            };
         }
+
+        pub const PrefixIteratorFrame = struct {
+            node: *const TrieNode,
+            child_iter: std.HashMap(u8, *TrieNode, std.hash_map.AutoContext(u8), std.hash_map.default_max_load_percentage).Iterator,
+            visited_self: bool,
+        };
+
+        pub const PrefixIterator = struct {
+            stack: std.ArrayList(PrefixIteratorFrame),
+            allocator: std.mem.Allocator,
+            current_key: std.ArrayList(u8),
+            prefix_len: usize,
+
+            pub fn deinit(self: *PrefixIterator) void {
+                self.stack.deinit(self.allocator);
+                self.current_key.deinit(self.allocator);
+            }
+
+            pub fn next(self: *PrefixIterator) !?[]const u8 {
+                while (self.stack.items.len > 0) {
+                    var frame = &self.stack.items[self.stack.items.len - 1];
+
+                    if (!frame.visited_self and frame.node.is_end) {
+                        frame.visited_self = true;
+                        return self.current_key.items;
+                    }
+
+                    if (frame.child_iter.next()) |entry| {
+                        const char = entry.key_ptr.*;
+                        const child = entry.value_ptr.*;
+
+                        try self.current_key.append(self.allocator, char);
+
+                        try self.stack.append(self.allocator, PrefixIteratorFrame{
+                            .node = child,
+                            .child_iter = child.children.iterator(),
+                            .visited_self = false,
+                        });
+                    } else {
+                        _ = self.stack.pop();
+                        // Don't pop below prefix length
+                        if (self.current_key.items.len > self.prefix_len) {
+                            _ = self.current_key.pop();
+                        }
+                    }
+                }
+                return null;
+            }
+        };
 
         pub const Iterator = struct {
             stack: std.ArrayList(IteratorFrame),
@@ -299,7 +371,7 @@ test "Trie: empty string key" {
     try std.testing.expectEqual(@as(usize, 1), trie.len);
     try std.testing.expectEqual(@as(i32, 42), trie.get("").?.*);
 
-    const deleted = trie.delete("");
+    const deleted = trie.remove("");
     try std.testing.expectEqual(@as(i32, 42), deleted.?);
     try std.testing.expectEqual(@as(usize, 0), trie.len);
 }
@@ -330,7 +402,7 @@ test "Trie: delete with shared prefixes" {
     try trie.put("card", 2);
     try trie.put("care", 3);
 
-    const deleted = trie.delete("card");
+    const deleted = trie.remove("card");
     try std.testing.expectEqual(@as(i32, 2), deleted.?);
     try std.testing.expectEqual(@as(usize, 2), trie.len);
     try std.testing.expect(!trie.contains("card"));
@@ -345,7 +417,7 @@ test "Trie: delete non-existent key" {
 
     try trie.put("hello", 1);
 
-    const deleted = trie.delete("world");
+    const deleted = trie.remove("world");
     try std.testing.expect(deleted == null);
     try std.testing.expectEqual(@as(usize, 1), trie.len);
 }
@@ -357,7 +429,7 @@ test "Trie: delete prefix that is not a key" {
 
     try trie.put("testing", 1);
 
-    const deleted = trie.delete("test");
+    const deleted = trie.remove("test");
     try std.testing.expect(deleted == null);
     try std.testing.expectEqual(@as(usize, 1), trie.len);
     try std.testing.expect(trie.contains("testing"));
@@ -433,9 +505,9 @@ test "Trie: delete all keys" {
     try trie.put("b", 2);
     try trie.put("c", 3);
 
-    _ = trie.delete("a");
-    _ = trie.delete("b");
-    _ = trie.delete("c");
+    _ = trie.remove("a");
+    _ = trie.remove("b");
+    _ = trie.remove("c");
 
     try std.testing.expectEqual(@as(usize, 0), trie.len);
     try std.testing.expect(!trie.hasPrefix("a"));

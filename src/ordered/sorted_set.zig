@@ -1,6 +1,15 @@
 //! A set that keeps its elements sorted at all times.
 //! Inserts are O(n) because elements may need to be shifted, but searching
 //! is O(log n) via binary search. It is cache-friendly for traversals.
+//!
+//! ## Thread Safety
+//! This data structure is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the set (via add/remove/clear) while iterating over
+//! `.items.items` will cause undefined behavior. Complete all iterations before
+//! modifying the structure.
 
 const std = @import("std");
 
@@ -14,6 +23,11 @@ pub fn SortedSet(
         items: std.ArrayList(T),
         allocator: std.mem.Allocator,
 
+        /// Returns the number of elements in the set.
+        pub fn count(self: *const Self) usize {
+            return self.items.items.len;
+        }
+
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
                 .items = std.ArrayList(T){},
@@ -25,13 +39,18 @@ pub fn SortedSet(
             self.items.deinit(self.allocator);
         }
 
+        /// Removes all elements from the set.
+        pub fn clear(self: *Self) void {
+            self.items.clearRetainingCapacity();
+        }
+
         fn compareFn(key: T, item: T) std.math.Order {
             return compare(key, item);
         }
 
         /// Adds a value to the set, maintaining sort order.
         /// Returns true if the value was added, false if it already existed.
-        pub fn add(self: *Self, value: T) !bool {
+        pub fn put(self: *Self, value: T) !bool {
             const index = std.sort.lowerBound(T, self.items.items, value, compareFn);
             // Check if value already exists
             if (index < self.items.items.len and compare(self.items.items[index], value) == .eq) {
@@ -67,9 +86,9 @@ test "SortedSet basic functionality" {
     var vec = SortedSet(i32, i32Compare).init(allocator);
     defer vec.deinit();
 
-    _ = try vec.add(100);
-    _ = try vec.add(50);
-    _ = try vec.add(75);
+    _ = try vec.put(100);
+    _ = try vec.put(50);
+    _ = try vec.put(75);
 
     try std.testing.expectEqualSlices(i32, &.{ 50, 75, 100 }, vec.items.items);
     try std.testing.expect(vec.contains(75));
@@ -95,7 +114,7 @@ test "SortedSet: single element" {
     var vec = SortedSet(i32, i32Compare).init(allocator);
     defer vec.deinit();
 
-    _ = try vec.add(42);
+    _ = try vec.put(42);
     try std.testing.expect(vec.contains(42));
     try std.testing.expectEqual(@as(usize, 1), vec.items.items.len);
 
@@ -109,9 +128,9 @@ test "SortedSet: duplicate values rejected" {
     var vec = SortedSet(i32, i32Compare).init(allocator);
     defer vec.deinit();
 
-    const added1 = try vec.add(10);
-    const added2 = try vec.add(10);
-    const added3 = try vec.add(10);
+    const added1 = try vec.put(10);
+    const added2 = try vec.put(10);
+    const added3 = try vec.put(10);
 
     // Duplicates should be rejected in a proper Set
     try std.testing.expect(added1);
@@ -125,10 +144,10 @@ test "SortedSet: negative numbers" {
     var vec = SortedSet(i32, i32Compare).init(allocator);
     defer vec.deinit();
 
-    _ = try vec.add(-5);
-    _ = try vec.add(-10);
-    _ = try vec.add(0);
-    _ = try vec.add(5);
+    _ = try vec.put(-5);
+    _ = try vec.put(-10);
+    _ = try vec.put(0);
+    _ = try vec.put(5);
 
     try std.testing.expectEqualSlices(i32, &.{ -10, -5, 0, 5 }, vec.items.items);
 }
@@ -141,7 +160,7 @@ test "SortedSet: large dataset" {
     // Insert in reverse order
     var i: i32 = 100;
     while (i >= 0) : (i -= 1) {
-        _ = try vec.add(i);
+        _ = try vec.put(i);
     }
 
     // Verify sorted
@@ -156,11 +175,11 @@ test "SortedSet: remove boundary cases" {
     var vec = SortedSet(i32, i32Compare).init(allocator);
     defer vec.deinit();
 
-    _ = try vec.add(1);
-    _ = try vec.add(2);
-    _ = try vec.add(3);
-    _ = try vec.add(4);
-    _ = try vec.add(5);
+    _ = try vec.put(1);
+    _ = try vec.put(2);
+    _ = try vec.put(3);
+    _ = try vec.put(4);
+    _ = try vec.put(5);
 
     // Remove first
     _ = vec.remove(0);

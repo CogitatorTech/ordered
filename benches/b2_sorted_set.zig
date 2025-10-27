@@ -32,7 +32,7 @@ fn benchmarkAdd(allocator: std.mem.Allocator, size: usize) !void {
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try set.add(i);
+        _ = try set.put(i);
     }
 
     const elapsed = timer.read() - start;
@@ -51,7 +51,7 @@ fn benchmarkContains(allocator: std.mem.Allocator, size: usize) !void {
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try set.add(i);
+        _ = try set.put(i);
     }
 
     var timer = try Timer.start();
@@ -80,7 +80,7 @@ fn benchmarkRemove(allocator: std.mem.Allocator, size: usize) !void {
 
     var i: i32 = 0;
     while (i < size) : (i += 1) {
-        try set.add(i);
+        _ = try set.put(i);
     }
 
     var timer = try Timer.start();

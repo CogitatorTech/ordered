@@ -14,7 +14,7 @@ pub fn main() !void {
     try trie.put("care", "to look after");
     try trie.put("careful", "cautious");
 
-    std.debug.print("Trie length: {d}\n", .{trie.len});
+    std.debug.print("Trie count: {d}\n", .{trie.count()});
 
     if (trie.get("car")) |value_ptr| {
         std.debug.print("Found 'car': {s}\n", .{value_ptr.*});
@@ -23,21 +23,19 @@ pub fn main() !void {
     std.debug.print("Has prefix 'car'? {any}\n", .{trie.hasPrefix("car")});
     std.debug.print("Contains 'ca'? {any}\n", .{trie.contains("ca")});
 
-    var keys = try trie.keysWithPrefix(allocator, "car");
-    defer {
-        for (keys.items) |key| {
-            allocator.free(key);
-        }
-        keys.deinit(allocator);
-    }
-
     std.debug.print("Keys with prefix 'car': ", .{});
-    for (keys.items, 0..) |key, i| {
-        if (i > 0) std.debug.print(", ", .{});
+    var prefix_iter = try trie.keysWithPrefix(allocator, "car");
+    defer prefix_iter.deinit();
+
+    var first = true;
+    while (try prefix_iter.next()) |key| {
+        if (!first) std.debug.print(", ", .{});
         std.debug.print("'{s}'", .{key});
+        first = false;
     }
     std.debug.print("\n", .{});
 
-    _ = trie.delete("card");
-    std.debug.print("Contains 'card' after delete? {any}\n", .{trie.contains("card")});
+    const removed = trie.remove("card");
+    std.debug.print("Removed 'card' with value: {?s}\n", .{removed});
+    std.debug.print("Contains 'card' after remove? {any}\n\n", .{trie.contains("card")});
 }

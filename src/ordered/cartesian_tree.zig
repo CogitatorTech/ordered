@@ -6,6 +6,14 @@ const Order = std.math.Order;
 /// A Cartesian Tree implementation that maintains both BST property for keys
 /// and heap property for priorities. Useful for range minimum queries and
 /// as a treap data structure.
+///
+/// ## Thread Safety
+/// This data structure is not thread-safe. External synchronization is required
+/// for concurrent access.
+///
+/// ## Iterator Invalidation
+/// WARNING: Modifying the tree (via put/remove/clear) while iterating will cause
+/// undefined behavior. Complete all iterations before modifying the structure.
 pub fn CartesianTree(comptime K: type, comptime V: type) type {
     return struct {
         const Self = @This();
@@ -37,8 +45,15 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.destroySubtree(self.root);
+            self.clear();
             self.* = undefined;
+        }
+
+        /// Removes all elements from the tree.
+        pub fn clear(self: *Self) void {
+            self.destroySubtree(self.root);
+            self.root = null;
+            self.len = 0;
         }
 
         fn destroySubtree(self: *Self, node: ?*Node) void {
@@ -146,41 +161,60 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             };
         }
 
-        /// Remove key from tree
-        pub fn remove(self: *Self, key: K) bool {
+        /// Get mutable pointer to value by key
+        pub fn getPtr(self: *Self, key: K) ?*V {
+            return self.getNodePtr(self.root, key);
+        }
+
+        fn getNodePtr(_: *Self, root: ?*Node, key: K) ?*V {
+            if (root == null) return null;
+
+            const node = root.?;
+            const key_cmp = std.math.order(key, node.key);
+
+            return switch (key_cmp) {
+                .eq => &node.value,
+                .lt => getNodePtr(undefined, node.left, key),
+                .gt => getNodePtr(undefined, node.right, key),
+            };
+        }
+
+        /// Remove key from tree and return its value if it existed
+        pub fn remove(self: *Self, key: K) ?V {
             const result = self.removeNode(self.root, key);
             self.root = result.root;
-            return result.removed;
+            return result.value;
         }
 
         const RemoveResult = struct {
             root: ?*Node,
-            removed: bool,
+            value: ?V,
         };
 
         fn removeNode(self: *Self, root: ?*Node, key: K) RemoveResult {
             if (root == null) {
-                return RemoveResult{ .root = null, .removed = false };
+                return RemoveResult{ .root = null, .value = null };
             }
 
             const node = root.?;
             const key_cmp = std.math.order(key, node.key);
 
             if (key_cmp == .eq) {
+                const value = node.value;
                 const merged = self.merge(node.left, node.right);
                 self.allocator.destroy(node);
                 self.len -= 1;
-                return RemoveResult{ .root = merged, .removed = true };
+                return RemoveResult{ .root = merged, .value = value };
             }
 
             if (key_cmp == .lt) {
                 const result = self.removeNode(node.left, key);
                 node.left = result.root;
-                return RemoveResult{ .root = root, .removed = result.removed };
+                return RemoveResult{ .root = root, .value = result.value };
             } else {
                 const result = self.removeNode(node.right, key);
                 node.right = result.root;
-                return RemoveResult{ .root = root, .removed = result.removed };
+                return RemoveResult{ .root = root, .value = result.value };
             }
         }
 
@@ -288,7 +322,8 @@ test "CartesianTree basic operations" {
     try testing.expect(!tree.contains(99));
 
     // Test remove
-    try testing.expect(tree.remove(3));
+    const removed = tree.remove(3);
+    try testing.expect(removed != null);
     try testing.expectEqual(@as(usize, 3), tree.count());
     try testing.expect(!tree.contains(3));
 }
@@ -301,7 +336,7 @@ test "CartesianTree: empty tree operations" {
     try testing.expectEqual(@as(usize, 0), tree.count());
     try testing.expect(tree.get(42) == null);
     try testing.expect(!tree.contains(42));
-    try testing.expect(!tree.remove(42));
+    try testing.expect(tree.remove(42) == null);
 }
 
 test "CartesianTree: single element" {
@@ -313,7 +348,7 @@ test "CartesianTree: single element" {
     try testing.expectEqual(@as(i32, 100), tree.get(42).?);
 
     const removed = tree.remove(42);
-    try testing.expect(removed);
+    try testing.expect(removed != null);
     try testing.expect(tree.isEmpty());
     try testing.expect(tree.root == null);
 }
@@ -382,7 +417,7 @@ test "CartesianTree: remove non-existent key" {
     try tree.putWithPriority(20, 20, 20);
 
     const removed = tree.remove(15);
-    try testing.expect(!removed);
+    try testing.expect(removed == null);
     try testing.expectEqual(@as(usize, 2), tree.count());
 }
 
@@ -394,9 +429,9 @@ test "CartesianTree: remove all elements" {
     try tree.putWithPriority(2, 2, 2);
     try tree.putWithPriority(3, 3, 3);
 
-    try testing.expect(tree.remove(1));
-    try testing.expect(tree.remove(2));
-    try testing.expect(tree.remove(3));
+    _ = tree.remove(1);
+    _ = tree.remove(2);
+    _ = tree.remove(3);
 
     try testing.expect(tree.isEmpty());
     try testing.expect(tree.get(2) == null);

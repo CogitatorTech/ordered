@@ -88,7 +88,7 @@ fn benchmarkDelete(allocator: std.mem.Allocator, size: usize) !void {
 
     i = 0;
     while (i < size) : (i += 1) {
-        _ = list.delete(i);
+        _ = list.remove(i);
     }
 
     const elapsed = timer.read() - start;

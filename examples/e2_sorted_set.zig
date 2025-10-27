@@ -12,9 +12,13 @@ pub fn main() !void {
     var sorted_set = ordered.SortedSet(i32, i32Compare).init(allocator);
     defer sorted_set.deinit();
 
-    try sorted_set.add(100);
-    try sorted_set.add(25);
-    try sorted_set.add(50);
+    _ = try sorted_set.put(100);
+    _ = try sorted_set.put(25);
+    _ = try sorted_set.put(50);
+    const duplicate = try sorted_set.put(50); // Try adding duplicate
 
-    std.debug.print("SortedSet contents: {any}\n\n", .{sorted_set.items.items});
+    std.debug.print("SortedSet count: {d}\n", .{sorted_set.count()});
+    std.debug.print("Added duplicate 50? {any}\n", .{duplicate});
+    std.debug.print("SortedSet contents: {any}\n", .{sorted_set.items.items});
+    std.debug.print("Contains 100? {any}\n\n", .{sorted_set.contains(100)});
 }
