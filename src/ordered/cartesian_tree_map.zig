@@ -1,6 +1,6 @@
-//! A Cartesian Tree (Treap) implementation combining binary search tree and heap properties.
+//! A Cartesian tree (Treap) implementation combining binary search tree and heap properties.
 //!
-//! A Cartesian Tree maintains two orderings simultaneously:
+//! A Cartesian tree maintains two orderings simultaneously:
 //! - BST property: keys are ordered (left < parent < right)
 //! - Heap property: priorities determine tree structure (max-heap by default)
 //!
@@ -21,14 +21,14 @@
 //! - Range minimum/maximum queries
 //! - Persistent data structures (functional programming)
 //! - When you need both ordering and priority-based structure
-//! - Simpler alternative to AVL/Red-Black trees with similar performance
+//! - Simpler alternative to AVL and Red-black trees with similar performance
 //!
 //! ## Thread Safety
 //! This data structure is not thread-safe. External synchronization is required
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the tree (via put/remove/clear) while iterating will cause
+//! WARNING: Modifying the tree (via put, remove, or clear) while iterating will cause
 //! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
@@ -60,7 +60,7 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
         allocator: Allocator,
         len: usize = 0,
 
-        /// Creates a new empty Cartesian Tree.
+        /// Creates a new empty Cartesian tree.
         ///
         /// ## Parameters
         /// - `allocator`: Memory allocator for node allocation
@@ -217,7 +217,8 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
 
         /// Retrieves a mutable pointer to the value associated with the given key.
         ///
-        /// Returns a mutable pointer to the value associated with the given key.
+        /// Returns `null` if the key doesn't exist. The returned pointer can be used
+        /// to modify the value in place without re-inserting.
         ///
         /// Time complexity: O(log n) expected
         pub fn getPtr(self: *Self, key: K) ?*V {

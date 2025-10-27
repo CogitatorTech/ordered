@@ -1,6 +1,6 @@
-//! Red-Black Tree - A self-balancing binary search tree.
+//! Red-black tree - A self-balancing binary search tree.
 //!
-//! Red-Black Trees guarantee O(log n) time complexity for insert, delete, and search
+//! Red-black trees guarantee O(log n) time complexity for insert, delete, and search
 //! operations by maintaining balance through color properties and rotations. They are
 //! widely used in standard libraries (e.g., C++ std::map, Java TreeMap).
 //!
@@ -27,7 +27,7 @@
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the tree (via put/remove/clear) while iterating will
+//! WARNING: Modifying the tree (via put, remove, or clear) while iterating will
 //! cause undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
@@ -35,7 +35,7 @@ const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const assert = std.debug.assert;
 
-/// Creates a Red-Black Tree type for the given data type and comparison context.
+/// Creates a Red-black tree type for the given data type and comparison context.
 ///
 /// ## Parameters
 /// - `T`: The data type to store in the tree
@@ -77,7 +77,7 @@ pub fn RedBlackTreeSet(comptime T: type, comptime Context: type) type {
         context: Context,
         size: usize,
 
-        /// Creates a new empty Red-Black Tree.
+        /// Creates a new empty Red-black tree.
         ///
         /// ## Parameters
         /// - `allocator`: Memory allocator for node allocation

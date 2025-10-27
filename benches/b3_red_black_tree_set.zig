@@ -9,7 +9,7 @@ pub fn main() !void {
 
     std.debug.print("=== RedBlackTree Benchmark ===\n\n", .{});
 
-    const sizes = [_]usize{ 1000, 10_000, 100_000 };
+    const sizes = [_]usize{ 1000, 10_000, 100_000, 1_000_000 };
 
     inline for (sizes) |size| {
         try benchmarkInsert(allocator, size);

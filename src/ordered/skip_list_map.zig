@@ -8,7 +8,7 @@
 //! - Insert: O(log n) average, O(n) worst case
 //! - Remove: O(log n) average, O(n) worst case
 //! - Search: O(log n) average, O(n) worst case
-//! - Space: O(n log n) average
+//! - Space: O(n) average (with level distribution, approximately 1.33n pointers)
 //!
 //! ## Use Cases
 //! - Ordered key-value storage with simpler implementation than trees
@@ -20,7 +20,7 @@
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the skip list (via put/remove/clear) while iterating will
+//! WARNING: Modifying the skip list (via put, remove, or clear) while iterating will
 //! cause undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");

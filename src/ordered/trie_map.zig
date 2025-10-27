@@ -23,7 +23,7 @@
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the trie (via put/remove/clear) while iterating will cause
+//! WARNING: Modifying the trie (via put, remove, or clear) while iterating will cause
 //! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
@@ -97,15 +97,12 @@ pub fn TrieMap(comptime V: type) type {
             self.* = undefined;
         }
 
-        /// Removes all elements from the trie while keeping the root allocated.
+        /// Removes all elements from the trie.
         ///
         /// Time complexity: O(n) where n is total number of nodes
-        ///
-        /// ## Errors
-        /// Returns `error.OutOfMemory` if root node reallocation fails.
-        pub fn clear(self: *Self) !void {
+        pub fn clear(self: *Self) void {
             self.root.deinit(self.allocator);
-            self.root = try TrieNode.init(self.allocator);
+            self.root = TrieNode.init(self.allocator) catch unreachable;
             self.len = 0;
         }
 

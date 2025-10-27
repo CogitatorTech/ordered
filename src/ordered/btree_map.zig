@@ -20,7 +20,7 @@
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the map (via put/remove/clear) while iterating will cause
+//! WARNING: Modifying the map (via put, remove, or clear) while iterating will cause
 //! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");

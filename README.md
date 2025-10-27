@@ -22,32 +22,45 @@ A sorted collection library for Zig
 
 ---
 
-Ordered is a Zig library that provides efficient implementations of various useful data structures
-like sorted maps and sorted sets that keep elements sorted based on some value.
+Ordered is a Zig library that provides fast and efficient implementations of various data structures that keep elements
+sorted (AKA sorted collections).
 It is written in pure Zig and has no external dependencies.
-It is inspired by [Java Collections](https://en.wikipedia.org/wiki/Java_collections_framework) and sorted containers in
-the [C++ standard library](https://en.cppreference.com/w/cpp/container).
+Ordered is inspired by [Java collections](https://en.wikipedia.org/wiki/Java_collections_framework) and sorted
+containers in the [C++ standard library](https://en.cppreference.com/w/cpp/container), and aims to provide a similar
+experience in Zig.
 
 ### Features
 
 - Simple and uniform API for all data structures
 - Pure Zig implementations with no external dependencies
-- Fast and memory-efficient implementations (see [beches](benches))
+- Fast and memory-efficient implementations (see [benches](benches))
 
 ### Data Structures
 
-| Data Structure                                                         | Build Complexity | Memory Complexity | Search Complexity |  
-|------------------------------------------------------------------------|------------------|-------------------|-------------------|
-| [B-tree](https://en.wikipedia.org/wiki/B-tree)                         | $O(\log n)$      | $O(n)$            | $O(\log n)$       |  
-| [Cartesian tree](https://en.wikipedia.org/wiki/Cartesian_tree)         | $O(\log n)$\*    | $O(n)$            | $O(\log n)$\*     |  
-| [Red-black tree](https://en.wikipedia.org/wiki/Red%E2%80%93black_tree) | $O(\log n)$      | $O(n)$            | $O(\log n)$       |  
-| [Skip list](https://en.wikipedia.org/wiki/Skip_list)                   | $O(\log n)$\*    | $O(n)$            | $O(\log n)$\*     |  
-| Sorted set                                                             | $O(n)$           | $O(n)$            | $O(\log n)$       |
-| [Trie](https://en.wikipedia.org/wiki/Trie)                             | $O(m)$           | $O(n \cdot m)$    | $O(m)$            |  
+Ordered provides two main interfaces for working with sorted collections: sorted maps and sorted sets.
+At the moment, Ordered supports the following implementations of these interfaces:
 
-- $n$: number of stored elements
-- $m$: maximum length of a key
-- \*: average case complexity
+#### Maps (Key-value)
+
+| Type               | Data Structure                                       | Insert       | Search       | Delete       | Space          |
+|--------------------|------------------------------------------------------|--------------|--------------|--------------|----------------|
+| `BTreeMap`         | [B-tree](https://en.wikipedia.org/wiki/B-tree)       | $O(\log n)$  | $O(\log n)$  | $O(\log n)$  | $O(n)$         |
+| `SkipListMap`      | [Skip list](https://en.wikipedia.org/wiki/Skip_list) | $O(\log n)$† | $O(\log n)$† | $O(\log n)$† | $O(n)$         |
+| `TrieMap`          | [Trie](https://en.wikipedia.org/wiki/Trie)           | $O(m)$       | $O(m)$       | $O(m)$       | $O(n \cdot m)$ |
+| `CartesianTreeMap` | [Treap](https://en.wikipedia.org/wiki/Treap)         | $O(\log n)$† | $O(\log n)$† | $O(\log n)$† | $O(n)$         |
+
+#### Sets (Value-only)
+
+| Type              | Data Structure                                                 | Insert      | Search      | Delete      | Space  |
+|-------------------|----------------------------------------------------------------|-------------|-------------|-------------|--------|
+| `SortedSet`       | [Sorted array](https://en.wikipedia.org/wiki/Sorted_array)     | $O(n)$      | $O(\log n)$ | $O(n)$      | $O(n)$ |
+| `RedBlackTreeSet` | [Red-black tree](https://en.wikipedia.org/wiki/Red-black_tree) | $O(\log n)$ | $O(\log n)$ | $O(\log n)$ | $O(n)$ |
+
+- $n$ = number of elements stored
+- $m$ = length of the key (for string-based keys)
+- † = average case complexity (the worst case is $O(n)$)
+
+See the [ROADMAP.md](ROADMAP.md) for the list of implemented and planned features.
 
 > [!IMPORTANT]
 > Ordered is in early development, so bugs and breaking API changes are expected.
