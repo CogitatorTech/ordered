@@ -1,10 +1,55 @@
+//! Red-Black Tree - A self-balancing binary search tree.
+//!
+//! Red-Black Trees guarantee O(log n) time complexity for insert, delete, and search
+//! operations by maintaining balance through color properties and rotations. They are
+//! widely used in standard libraries (e.g., C++ std::map, Java TreeMap).
+//!
+//! ## Complexity
+//! - Insert: O(log n)
+//! - Remove: O(log n)
+//! - Search: O(log n)
+//! - Space: O(n)
+//!
+//! ## Properties
+//! 1. Every node is either red or black
+//! 2. The root is always black
+//! 3. All leaves (NIL) are black
+//! 4. Red nodes have black children (no two red nodes in a row)
+//! 5. All paths from root to leaves contain the same number of black nodes
+//!
+//! ## Use Cases
+//! - Ordered set/map with guaranteed O(log n) operations
+//! - When worst-case performance matters more than average case
+//! - Standard library implementations of associative containers
+//!
+//! ## Thread Safety
+//! This data structure is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the tree (via put/remove/clear) while iterating will
+//! cause undefined behavior. Complete all iterations before modifying the structure.
+
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const assert = std.debug.assert;
 
-/// Red-Black Tree implementation
-/// A self-balancing binary search tree with O(log n) operations
+/// Creates a Red-Black Tree type for the given data type and comparison context.
+///
+/// ## Parameters
+/// - `T`: The data type to store in the tree
+/// - `Context`: A type providing a `lessThan(ctx, a, b) bool` method for comparison
+///
+/// ## Example
+/// ```zig
+/// const Context = struct {
+///     pub fn lessThan(_: @This(), a: i32, b: i32) bool {
+///         return a < b;
+///     }
+/// };
+/// var tree = RedBlackTree(i32, Context).init(allocator, .{});
+/// ```
 pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
     return struct {
         const Self = @This();
@@ -32,6 +77,11 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         context: Context,
         size: usize,
 
+        /// Creates a new empty Red-Black Tree.
+        ///
+        /// ## Parameters
+        /// - `allocator`: Memory allocator for node allocation
+        /// - `context`: Comparison context instance
         pub fn init(allocator: Allocator, context: Context) Self {
             return Self{
                 .root = null,
@@ -41,10 +91,16 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             };
         }
 
+        /// Frees all memory used by the tree.
+        ///
+        /// After calling this, the tree is no longer usable.
         pub fn deinit(self: *Self) void {
             self.clear();
         }
 
+        /// Removes all elements from the tree.
+        ///
+        /// Time complexity: O(n)
         pub fn clear(self: *Self) void {
             self.clearNode(self.root);
             self.root = null;
@@ -59,13 +115,25 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             }
         }
 
+        /// Returns the number of elements in the tree.
+        ///
+        /// Time complexity: O(1)
         pub fn count(self: Self) usize {
             return self.size;
         }
 
-        pub fn insert(self: *Self, data: T) !void {
+        /// Inserts or updates a value in the tree.
+        ///
+        /// If the value already exists (as determined by the context's lessThan method),
+        /// it will be updated. Otherwise, a new node is created.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if node allocation fails.
+        pub fn put(self: *Self, data: T) !void {
             // Check if key already exists first to avoid unnecessary allocation
-            if (self.find(data)) |existing| {
+            if (self.get(data)) |existing| {
                 existing.data = data;
                 return;
             }
@@ -167,11 +235,17 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             if (self.root) |root| root.color = .black; // Root is always black
         }
 
-        pub fn remove(self: *Self, data: T) bool {
-            const node = self.find(data) orelse return false;
+        /// Removes a value from the tree and returns it if it existed.
+        ///
+        /// Returns `null` if the value is not found.
+        ///
+        /// Time complexity: O(log n)
+        pub fn remove(self: *Self, data: T) ?T {
+            const node = self.get(data) orelse return null;
+            const value = node.data;
             self.removeNode(node);
             self.size -= 1;
-            return true;
+            return value;
         }
 
         fn removeNode(self: *Self, node: *Node) void {
@@ -348,7 +422,13 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             node.parent = left;
         }
 
-        pub fn find(self: Self, data: T) ?*Node {
+        /// Returns a pointer to the node containing the data.
+        ///
+        /// Returns `null` if the data is not found. The returned node pointer can be used
+        /// to access or modify the data directly.
+        ///
+        /// Time complexity: O(log n)
+        pub fn get(self: Self, data: T) ?*Node {
             var current = self.root;
 
             while (current) |node| {
@@ -364,8 +444,11 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             return null;
         }
 
+        /// Checks whether the tree contains the given value.
+        ///
+        /// Time complexity: O(log n)
         pub fn contains(self: Self, data: T) bool {
-            return self.find(data) != null;
+            return self.get(data) != null;
         }
 
         fn findMinimum(self: Self, node: *Node) *Node {
@@ -459,9 +542,9 @@ test "RedBlackTree: basic operations" {
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(10);
-    try tree.insert(20);
-    try tree.insert(5);
+    try tree.put(10);
+    try tree.put(20);
+    try tree.put(5);
 
     try std.testing.expectEqual(@as(usize, 3), tree.count());
     try std.testing.expect(tree.contains(10));
@@ -476,7 +559,7 @@ test "RedBlackTree: empty tree operations" {
 
     try std.testing.expect(!tree.contains(42));
     try std.testing.expectEqual(@as(usize, 0), tree.count());
-    try std.testing.expect(!tree.remove(42));
+    try std.testing.expect(tree.remove(42) == null);
 }
 
 test "RedBlackTree: single element" {
@@ -484,13 +567,13 @@ test "RedBlackTree: single element" {
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(42);
+    try tree.put(42);
     try std.testing.expectEqual(@as(usize, 1), tree.count());
     try std.testing.expect(tree.contains(42));
     try std.testing.expect(tree.root.?.color == .black);
 
     const removed = tree.remove(42);
-    try std.testing.expect(removed);
+    try std.testing.expect(removed != null);
     try std.testing.expectEqual(@as(usize, 0), tree.count());
     try std.testing.expect(tree.root == null);
 }
@@ -500,9 +583,9 @@ test "RedBlackTree: duplicate insertions" {
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(10);
-    try tree.insert(10);
-    try tree.insert(10);
+    try tree.put(10);
+    try tree.put(10);
+    try tree.put(10);
 
     // Duplicates update existing nodes
     try std.testing.expectEqual(@as(usize, 1), tree.count());
@@ -515,7 +598,7 @@ test "RedBlackTree: sequential insertion" {
 
     var i: i32 = 0;
     while (i < 50) : (i += 1) {
-        try tree.insert(i);
+        try tree.put(i);
     }
 
     try std.testing.expectEqual(@as(usize, 50), tree.count());
@@ -534,7 +617,7 @@ test "RedBlackTree: reverse insertion" {
 
     var i: i32 = 50;
     while (i > 0) : (i -= 1) {
-        try tree.insert(i);
+        try tree.put(i);
     }
 
     try std.testing.expectEqual(@as(usize, 50), tree.count());
@@ -546,14 +629,14 @@ test "RedBlackTree: remove from middle" {
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(10);
-    try tree.insert(5);
-    try tree.insert(15);
-    try tree.insert(3);
-    try tree.insert(7);
+    try tree.put(10);
+    try tree.put(5);
+    try tree.put(15);
+    try tree.put(3);
+    try tree.put(7);
 
     const removed = tree.remove(5);
-    try std.testing.expect(removed);
+    try std.testing.expect(removed != null);
     try std.testing.expectEqual(@as(usize, 4), tree.count());
     try std.testing.expect(!tree.contains(5));
     try std.testing.expect(tree.contains(3));
@@ -565,12 +648,12 @@ test "RedBlackTree: remove root" {
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(10);
-    try tree.insert(5);
-    try tree.insert(15);
+    try tree.put(10);
+    try tree.put(5);
+    try tree.put(15);
 
     const removed = tree.remove(10);
-    try std.testing.expect(removed);
+    try std.testing.expect(removed != null);
     try std.testing.expectEqual(@as(usize, 2), tree.count());
     try std.testing.expect(tree.root.?.color == .black);
 }
@@ -580,11 +663,11 @@ test "RedBlackTree: minimum and maximum" {
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(10);
-    try tree.insert(5);
-    try tree.insert(15);
-    try tree.insert(3);
-    try tree.insert(20);
+    try tree.put(10);
+    try tree.put(5);
+    try tree.put(15);
+    try tree.put(3);
+    try tree.put(20);
 
     const min = tree.minimum(null);
     const max = tree.maximum(null);
@@ -612,9 +695,9 @@ test "RedBlackTree: clear" {
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(1);
-    try tree.insert(2);
-    try tree.insert(3);
+    try tree.put(1);
+    try tree.put(2);
+    try tree.put(3);
 
     tree.clear();
     try std.testing.expectEqual(@as(usize, 0), tree.count());
@@ -626,25 +709,25 @@ test "RedBlackTree: negative numbers" {
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(-10);
-    try tree.insert(-5);
-    try tree.insert(0);
-    try tree.insert(5);
+    try tree.put(-10);
+    try tree.put(-5);
+    try tree.put(0);
+    try tree.put(5);
 
     try std.testing.expectEqual(@as(usize, 4), tree.count());
     try std.testing.expect(tree.contains(-10));
     try std.testing.expect(tree.contains(0));
 }
 
-test "RedBlackTree: find returns correct node" {
+test "RedBlackTree: get returns correct node" {
     const allocator = std.testing.allocator;
     var tree = RedBlackTree(i32, DefaultContext(i32)).init(allocator, .{});
     defer tree.deinit();
 
-    try tree.insert(10);
-    try tree.insert(20);
+    try tree.put(10);
+    try tree.put(20);
 
-    const node = tree.find(10);
+    const node = tree.get(10);
     try std.testing.expect(node != null);
     try std.testing.expectEqual(@as(i32, 10), node.?.data);
 }

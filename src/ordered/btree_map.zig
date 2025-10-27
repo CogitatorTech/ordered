@@ -1,10 +1,47 @@
-//! A B-Tree based associative map.
-//! This is a workhorse for most ordered map use cases. B-Trees are extremely
-//! cache-friendly due to their high branching factor, making them faster than
-//! binary search trees for larger datasets.
+//! A B-tree based associative map with configurable branching factor.
+//!
+//! B-trees are self-balancing tree data structures that maintain sorted data and allow
+//! searches, sequential access, insertions, and deletions in logarithmic time. They are
+//! optimized for systems that read and write large blocks of data.
+//!
+//! ## Complexity
+//! - Insert: O(log n)
+//! - Remove: O(log n)
+//! - Search: O(log n)
+//! - Space: O(n)
+//!
+//! ## Use Cases
+//! - Large datasets where cache efficiency matters
+//! - Ordered key-value storage with frequent range queries
+//! - Database indices and file systems
+//!
+//! ## Thread Safety
+//! This data structure is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the map (via put/remove/clear) while iterating will cause
+//! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
 
+/// Creates a B-tree map type with the specified key type, value type, comparison function,
+/// and branching factor.
+///
+/// ## Parameters
+/// - `K`: The key type. Must be comparable via the `compare` function.
+/// - `V`: The value type.
+/// - `compare`: Function that compares two keys and returns their ordering.
+/// - `BRANCHING_FACTOR`: Number of children per node (must be >= 3). Higher values
+///   improve cache efficiency but use more memory per node. Typical values: 4-16.
+///
+/// ## Example
+/// ```zig
+/// fn i32Compare(a: i32, b: i32) std.math.Order {
+///     return std.math.order(a, b);
+/// }
+/// var map = BTreeMap(i32, []const u8, i32Compare, 4).init(allocator);
+/// ```
 pub fn BTreeMap(
     comptime K: type,
     comptime V: type,
@@ -28,13 +65,36 @@ pub fn BTreeMap(
         allocator: std.mem.Allocator,
         len: usize = 0,
 
+        /// Creates a new empty B-tree map.
+        ///
+        /// The map must be deinitialized with `deinit()` to free allocated memory.
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{ .allocator = allocator };
         }
 
+        /// Returns the number of elements in the map.
+        ///
+        /// Time complexity: O(1)
+        pub fn count(self: *const Self) usize {
+            return self.len;
+        }
+
+        /// Frees all memory used by the map.
+        ///
+        /// After calling this, the map is no longer usable. All references to keys
+        /// and values become invalid.
         pub fn deinit(self: *Self) void {
-            if (self.root) |r| self.deinitNode(r);
+            self.clear();
             self.* = undefined;
+        }
+
+        /// Removes all elements from the map while keeping the allocated structure.
+        ///
+        /// Time complexity: O(n)
+        pub fn clear(self: *Self) void {
+            if (self.root) |r| self.deinitNode(r);
+            self.root = null;
+            self.len = 0;
         }
 
         fn deinitNode(self: *Self, node: *Node) void {
@@ -62,7 +122,18 @@ pub fn BTreeMap(
             return compare(key_as_context, item);
         }
 
-        /// Retrieves a pointer to the value associated with `key`.
+        /// Retrieves an immutable pointer to the value associated with the given key.
+        ///
+        /// Returns `null` if the key does not exist in the map.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Example
+        /// ```zig
+        /// if (map.get(42)) |value| {
+        ///     std.debug.print("Value: {}\n", .{value.*});
+        /// }
+        /// ```
         pub fn get(self: *const Self, key: K) ?*const V {
             var current = self.root;
             while (current) |node| {
@@ -77,14 +148,53 @@ pub fn BTreeMap(
             return null;
         }
 
-        /// Inserts a key-value pair. If the key exists, the value is updated.
-        pub fn put(self: *Self, key: K, value: V) !void {
-            // Check if key exists and just update the value in place
-            if (self.get(key) != null) {
-                _ = self.remove(key);
-                // Don't increment len here, it will be incremented below
-            }
+        /// Retrieves a mutable pointer to the value associated with the given key.
+        ///
+        /// Returns `null` if the key does not exist. The returned pointer can be used
+        /// to modify the value in place without re-inserting.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Example
+        /// ```zig
+        /// if (map.getPtr(42)) |value_ptr| {
+        ///     value_ptr.* += 10;  // Modify in place
+        /// }
+        /// ```
+        pub fn getPtr(self: *Self, key: K) ?*V {
+            var current = self.root;
+            while (current) |node| {
+                const res = std.sort.binarySearch(K, node.keys[0..node.len], key, compareFn);
+                if (res) |index| return &node.values[index];
 
+                if (node.is_leaf) return null;
+
+                const insertion_point = std.sort.lowerBound(K, node.keys[0..node.len], key, compareFn);
+                current = node.children[insertion_point];
+            }
+            return null;
+        }
+
+        /// Checks whether the map contains the given key.
+        ///
+        /// Time complexity: O(log n)
+        pub fn contains(self: *const Self, key: K) bool {
+            return self.get(key) != null;
+        }
+
+        /// Inserts a key-value pair into the map. If the key already exists, updates its value.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if allocation fails.
+        ///
+        /// ## Example
+        /// ```zig
+        /// try map.put(1, "one");
+        /// try map.put(1, "ONE");  // Updates the value
+        /// ```
+        pub fn put(self: *Self, key: K, value: V) !void {
             var root_node = if (self.root) |r| r else {
                 const new_node = try self.createNode();
                 new_node.keys[0] = key;
@@ -104,8 +214,10 @@ pub fn BTreeMap(
                 root_node = new_root;
             }
 
-            self.insertNonFull(root_node, key, value);
-            self.len += 1;
+            const is_new = self.insertNonFull(root_node, key, value);
+            if (is_new) {
+                self.len += 1;
+            }
         }
 
         fn splitChild(self: *Self, parent: *Node, index: u16) void {
@@ -153,9 +265,20 @@ pub fn BTreeMap(
             parent.len += 1;
         }
 
-        fn insertNonFull(self: *Self, node: *Node, key: K, value: V) void {
+        fn insertNonFull(self: *Self, node: *Node, key: K, value: V) bool {
             var i = node.len;
             if (node.is_leaf) {
+                // Check if key already exists
+                var j: u16 = 0;
+                while (j < node.len) : (j += 1) {
+                    if (compare(key, node.keys[j]) == .eq) {
+                        // Update existing value
+                        node.values[j] = value;
+                        return false; // Not a new insertion
+                    }
+                }
+
+                // Insert new key
                 while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {
                     node.keys[i] = node.keys[i - 1];
                     node.values[i] = node.values[i - 1];
@@ -163,7 +286,18 @@ pub fn BTreeMap(
                 node.keys[i] = key;
                 node.values[i] = value;
                 node.len += 1;
+                return true; // New insertion
             } else {
+                // Check if key exists in current node
+                var j: u16 = 0;
+                while (j < node.len) : (j += 1) {
+                    if (compare(key, node.keys[j]) == .eq) {
+                        // Update existing value
+                        node.values[j] = value;
+                        return false; // Not a new insertion
+                    }
+                }
+
                 while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {}
                 if (node.children[i].?.len == BRANCHING_FACTOR - 1) {
                     self.splitChild(node, i);
@@ -171,10 +305,22 @@ pub fn BTreeMap(
                         i += 1;
                     }
                 }
-                self.insertNonFull(node.children[i].?, key, value);
+                return self.insertNonFull(node.children[i].?, key, value);
             }
         }
 
+        /// Removes a key-value pair from the map and returns the value.
+        ///
+        /// Returns `null` if the key does not exist.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Example
+        /// ```zig
+        /// if (map.remove(42)) |value| {
+        ///     std.debug.print("Removed value: {}\n", .{value});
+        /// }
+        /// ```
         pub fn remove(self: *Self, key: K) ?V {
             if (self.root == null) return null;
             const old_len = self.len;
@@ -227,18 +373,23 @@ pub fn BTreeMap(
                 const pred = self.getPredecessor(node, index);
                 node.keys[index] = pred.key;
                 node.values[index] = pred.value;
+                // deleteFromNode already decremented self.len, so increment it back
+                // because we're replacing, not actually removing
+                const old_len = self.len;
                 _ = self.deleteFromNode(node.children[index].?, pred.key);
-                self.len += 1;
+                self.len = old_len;
             } else if (node.children[index + 1].?.len > MIN_KEYS) {
                 const succ = self.getSuccessor(node, index);
                 node.keys[index] = succ.key;
                 node.values[index] = succ.value;
+                const old_len = self.len;
                 _ = self.deleteFromNode(node.children[index + 1].?, succ.key);
-                self.len += 1;
+                self.len = old_len;
             } else {
                 self.merge(node, index);
+                const old_len = self.len;
                 _ = self.deleteFromNode(node.children[index].?, key);
-                self.len += 1;
+                self.len = old_len;
             }
         }
 

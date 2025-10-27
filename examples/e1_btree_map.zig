@@ -9,7 +9,7 @@ pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     std.debug.print("## BTreeMap Example ##\n", .{});
-    const B = 4; // Branching Factor
+    const B = 4; // Branching Factor for B-tree
     var map = ordered.BTreeMap([]const u8, u32, strCompare, B).init(allocator);
     defer map.deinit();
 
@@ -22,6 +22,8 @@ pub fn main() !void {
         std.debug.print("Found key '{s}': value is {d}\n", .{ key_to_find, value_ptr.* });
     }
 
-    _ = map.remove("banana");
-    std.debug.print("Contains 'banana' after delete? {any}\n\n", .{map.get("banana") != null});
+    const removed = map.remove("banana");
+    std.debug.print("Removed 'banana' with value: {?d}\n", .{if (removed) |v| v else null});
+    std.debug.print("Contains 'banana' after remove? {any}\n", .{map.contains("banana")});
+    std.debug.print("Map count: {d}\n\n", .{map.count()});
 }

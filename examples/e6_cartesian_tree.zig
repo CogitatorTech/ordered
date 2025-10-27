@@ -19,9 +19,11 @@ pub fn main() !void {
         std.debug.print("Found key {d}: value is '{s}'\n", .{ search_key, value });
     }
 
-    if (cartesian_tree.remove(30)) {
-        std.debug.print("Successfully deleted key {d}\n", .{search_key});
+    const removed = cartesian_tree.remove(30);
+    if (removed) |value| {
+        std.debug.print("Removed key {d} with value: '{s}'\n", .{ search_key, value });
     }
 
-    std.debug.print("Size after deletion: {d}\n\n", .{cartesian_tree.count()});
+    std.debug.print("Size after deletion: {d}\n", .{cartesian_tree.count()});
+    std.debug.print("Contains {d}? {any}\n\n", .{ search_key, cartesian_tree.contains(search_key) });
 }

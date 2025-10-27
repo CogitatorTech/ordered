@@ -1,11 +1,41 @@
+//! A Cartesian Tree (Treap) implementation combining binary search tree and heap properties.
+//!
+//! A Cartesian Tree maintains two orderings simultaneously:
+//! - BST property: keys are ordered (left < parent < right)
+//! - Heap property: priorities determine tree structure (max-heap by default)
+//!
+//! This dual ordering makes it ideal for randomized balanced trees (treaps) and
+//! range minimum/maximum query problems.
+//!
+//! ## Complexity
+//! - Insert: O(log n) expected, O(n) worst case
+//! - Remove: O(log n) expected, O(n) worst case
+//! - Search: O(log n) expected, O(n) worst case
+//! - Space: O(n)
+//!
+//! Note: With random priorities (using `put()`), operations are O(log n) expected.
+//! Worst case O(n) occurs only with adversarial priority assignment.
+//!
+//! ## Use Cases
+//! - Randomized balanced search trees (treaps with random priorities)
+//! - Range minimum/maximum queries
+//! - Persistent data structures (functional programming)
+//! - When you need both ordering and priority-based structure
+//! - Simpler alternative to AVL/Red-Black trees with similar performance
+//!
+//! ## Thread Safety
+//! This data structure is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the tree (via put/remove/clear) while iterating will cause
+//! undefined behavior. Complete all iterations before modifying the structure.
+
 const std = @import("std");
 const testing = std.testing;
 const Allocator = std.mem.Allocator;
 const Order = std.math.Order;
 
-/// A Cartesian Tree implementation that maintains both BST property for keys
-/// and heap property for priorities. Useful for range minimum queries and
-/// as a treap data structure.
 pub fn CartesianTree(comptime K: type, comptime V: type) type {
     return struct {
         const Self = @This();
@@ -30,15 +60,31 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
         allocator: Allocator,
         len: usize = 0,
 
+        /// Creates a new empty Cartesian Tree.
+        ///
+        /// ## Parameters
+        /// - `allocator`: Memory allocator for node allocation
         pub fn init(allocator: Allocator) Self {
             return Self{
                 .allocator = allocator,
             };
         }
 
+        /// Frees all memory used by the tree.
+        ///
+        /// After calling this, the tree is no longer usable.
         pub fn deinit(self: *Self) void {
-            self.destroySubtree(self.root);
+            self.clear();
             self.* = undefined;
+        }
+
+        /// Removes all elements from the tree.
+        ///
+        /// Time complexity: O(n)
+        pub fn clear(self: *Self) void {
+            self.destroySubtree(self.root);
+            self.root = null;
+            self.len = 0;
         }
 
         fn destroySubtree(self: *Self, node: ?*Node) void {
@@ -49,13 +95,32 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             }
         }
 
-        /// Insert a key-value pair with random priority
+        /// Inserts a key-value pair with a random priority.
+        ///
+        /// Uses cryptographically random priorities to ensure expected O(log n) performance.
+        /// If the key already exists, updates its value and priority.
+        ///
+        /// Time complexity: O(log n) expected
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, key: K, value: V) !void {
             const priority = std.crypto.random.int(u32);
             try self.putWithPriority(key, value, priority);
         }
 
-        /// Insert a key-value pair with explicit priority
+        /// Inserts a key-value pair with an explicit priority.
+        ///
+        /// Allows manual control over tree structure via priorities. Higher priorities
+        /// are placed closer to the root (max-heap property). Use this for testing or
+        /// when you need deterministic tree structure.
+        ///
+        /// If the key already exists, updates its value and priority.
+        ///
+        /// Time complexity: O(log n) expected with random priorities
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn putWithPriority(self: *Self, key: K, value: V, priority: u32) !void {
             const new_node = try self.allocator.create(Node);
             new_node.* = Node.init(key, value, priority);
@@ -128,7 +193,11 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             }
         }
 
-        /// Get value by key
+        /// Retrieves the value associated with the given key.
+        ///
+        /// Returns `null` if the key doesn't exist.
+        ///
+        /// Time complexity: O(log n) expected
         pub fn get(self: *const Self, key: K) ?V {
             return self.getNode(self.root, key);
         }
@@ -146,41 +215,64 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             };
         }
 
-        /// Remove key from tree
-        pub fn remove(self: *Self, key: K) bool {
+        /// Retrieves a mutable pointer to the value associated with the given key.
+        ///
+        /// Returns `null` if the key doesn't exist. Allows in-place modification of the value.
+        ///
+        /// Time complexity: O(log n) expected
+        pub fn getPtr(self: *Self, key: K) ?*V {
+            return self.getNodePtr(self.root, key);
+        }
+
+        fn getNodePtr(_: *Self, root: ?*Node, key: K) ?*V {
+            if (root == null) return null;
+
+            const node = root.?;
+            const key_cmp = std.math.order(key, node.key);
+
+            return switch (key_cmp) {
+                .eq => &node.value,
+                .lt => getNodePtr(undefined, node.left, key),
+                .gt => getNodePtr(undefined, node.right, key),
+            };
+        }
+
+        /// Remove key from tree and return its value if it existed
+        pub fn remove(self: *Self, key: K) ?V {
             const result = self.removeNode(self.root, key);
             self.root = result.root;
-            return result.removed;
+            return result.value;
         }
 
         const RemoveResult = struct {
             root: ?*Node,
-            removed: bool,
+            value: ?V,
         };
 
         fn removeNode(self: *Self, root: ?*Node, key: K) RemoveResult {
             if (root == null) {
-                return RemoveResult{ .root = null, .removed = false };
+                return RemoveResult{ .root = null, .value = null };
             }
 
             const node = root.?;
             const key_cmp = std.math.order(key, node.key);
 
             if (key_cmp == .eq) {
+                const value = node.value;
                 const merged = self.merge(node.left, node.right);
                 self.allocator.destroy(node);
                 self.len -= 1;
-                return RemoveResult{ .root = merged, .removed = true };
+                return RemoveResult{ .root = merged, .value = value };
             }
 
             if (key_cmp == .lt) {
                 const result = self.removeNode(node.left, key);
                 node.left = result.root;
-                return RemoveResult{ .root = root, .removed = result.removed };
+                return RemoveResult{ .root = root, .value = result.value };
             } else {
                 const result = self.removeNode(node.right, key);
                 node.right = result.root;
-                return RemoveResult{ .root = root, .removed = result.removed };
+                return RemoveResult{ .root = root, .value = result.value };
             }
         }
 
@@ -220,12 +312,12 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             stack: std.ArrayList(*Node),
             allocator: Allocator,
 
-            pub fn init(allocator: Allocator, root: ?*Node) Iterator {
+            pub fn init(allocator: Allocator, root: ?*Node) !Iterator {
                 var it = Iterator{
-                    .stack = .{},
+                    .stack = std.ArrayList(*Node){},
                     .allocator = allocator,
                 };
-                it.pushLeft(root);
+                try it.pushLeft(root);
                 return it;
             }
 
@@ -233,23 +325,23 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
                 self.stack.deinit(self.allocator);
             }
 
-            fn pushLeft(self: *Iterator, node: ?*Node) void {
+            fn pushLeft(self: *Iterator, node: ?*Node) !void {
                 var current = node;
                 while (current) |n| {
-                    self.stack.append(self.allocator, n) catch return; // Handle potential allocation failure
+                    try self.stack.append(self.allocator, n);
                     current = n.left;
                 }
             }
 
             // src/cartesian_tree.zig
 
-            pub fn next(self: *Iterator) ?struct { key: K, value: V } {
+            pub fn next(self: *Iterator) !?struct { key: K, value: V } {
                 // self.stack.pop() returns `?*Node`.
                 // The `if` statement correctly handles the optional, unwrapping it into `node`.
                 if (self.stack.pop()) |node| {
                     // 'node' is now a valid `*Node` pointer.
                     if (node.right) |right_node| {
-                        self.pushLeft(right_node);
+                        try self.pushLeft(right_node);
                     }
                     return .{ .key = node.key, .value = node.value };
                 } else {
@@ -259,7 +351,7 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
         };
 
         /// Create iterator for in-order traversal
-        pub fn iterator(self: *const Self, allocator: Allocator) Iterator {
+        pub fn iterator(self: *const Self, allocator: Allocator) !Iterator {
             return Iterator.init(allocator, self.root);
         }
     };
@@ -288,7 +380,8 @@ test "CartesianTree basic operations" {
     try testing.expect(!tree.contains(99));
 
     // Test remove
-    try testing.expect(tree.remove(3));
+    const removed = tree.remove(3);
+    try testing.expect(removed != null);
     try testing.expectEqual(@as(usize, 3), tree.count());
     try testing.expect(!tree.contains(3));
 }
@@ -301,7 +394,7 @@ test "CartesianTree: empty tree operations" {
     try testing.expectEqual(@as(usize, 0), tree.count());
     try testing.expect(tree.get(42) == null);
     try testing.expect(!tree.contains(42));
-    try testing.expect(!tree.remove(42));
+    try testing.expect(tree.remove(42) == null);
 }
 
 test "CartesianTree: single element" {
@@ -313,7 +406,7 @@ test "CartesianTree: single element" {
     try testing.expectEqual(@as(i32, 100), tree.get(42).?);
 
     const removed = tree.remove(42);
-    try testing.expect(removed);
+    try testing.expect(removed != null);
     try testing.expect(tree.isEmpty());
     try testing.expect(tree.root == null);
 }
@@ -382,7 +475,7 @@ test "CartesianTree: remove non-existent key" {
     try tree.putWithPriority(20, 20, 20);
 
     const removed = tree.remove(15);
-    try testing.expect(!removed);
+    try testing.expect(removed == null);
     try testing.expectEqual(@as(usize, 2), tree.count());
 }
 
@@ -394,9 +487,9 @@ test "CartesianTree: remove all elements" {
     try tree.putWithPriority(2, 2, 2);
     try tree.putWithPriority(3, 3, 3);
 
-    try testing.expect(tree.remove(1));
-    try testing.expect(tree.remove(2));
-    try testing.expect(tree.remove(3));
+    _ = tree.remove(1);
+    _ = tree.remove(2);
+    _ = tree.remove(3);
 
     try testing.expect(tree.isEmpty());
     try testing.expect(tree.get(2) == null);
@@ -424,14 +517,14 @@ test "CartesianTree: iterator traversal" {
     try tree.putWithPriority(20, 20, 20);
     try tree.putWithPriority(5, 5, 5);
 
-    var iter = tree.iterator(testing.allocator);
+    var iter = try tree.iterator(testing.allocator);
     defer iter.deinit();
 
     // Should iterate in sorted key order (BST property)
     const expected = [_]i32{ 5, 10, 20, 30 };
     var idx: usize = 0;
 
-    while (iter.next()) |entry| : (idx += 1) {
+    while (try iter.next()) |entry| : (idx += 1) {
         try testing.expectEqual(expected[idx], entry.key);
     }
     try testing.expectEqual(@as(usize, 4), idx);
