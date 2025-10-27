@@ -16,7 +16,7 @@
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/CogitatorTech/ordered/blob/main/LICENSE)
 
-A sorted collection library (sorted sets and sorted maps) for Zig
+A sorted collection library for Zig
 
 </div>
 
@@ -59,8 +59,6 @@ At the moment, Ordered supports the following implementations of these interface
 - $n$ = number of elements stored
 - $m$ = length of the key (for string-based keys)
 - † = average case complexity (the worst case is $O(n)$)
-
-See the [ROADMAP.md](ROADMAP.md) for the list of implemented and planned features.
 
 > [!IMPORTANT]
 > Ordered is in early development, so bugs and breaking API changes are expected.
