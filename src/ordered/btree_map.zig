@@ -1,7 +1,19 @@
-//! A B-Tree based associative map.
-//! This is a workhorse for most ordered map use cases. B-Trees are extremely
-//! cache-friendly due to their high branching factor, making them faster than
-//! binary search trees for larger datasets.
+//! A B-tree based associative map with configurable branching factor.
+//!
+//! B-trees are self-balancing tree data structures that maintain sorted data and allow
+//! searches, sequential access, insertions, and deletions in logarithmic time. They are
+//! optimized for systems that read and write large blocks of data.
+//!
+//! ## Complexity
+//! - Insert: O(log n)
+//! - Remove: O(log n)
+//! - Search: O(log n)
+//! - Space: O(n)
+//!
+//! ## Use Cases
+//! - Large datasets where cache efficiency matters
+//! - Ordered key-value storage with frequent range queries
+//! - Database indices and file systems
 //!
 //! ## Thread Safety
 //! This data structure is not thread-safe. External synchronization is required
@@ -13,6 +25,23 @@
 
 const std = @import("std");
 
+/// Creates a B-tree map type with the specified key type, value type, comparison function,
+/// and branching factor.
+///
+/// ## Parameters
+/// - `K`: The key type. Must be comparable via the `compare` function.
+/// - `V`: The value type.
+/// - `compare`: Function that compares two keys and returns their ordering.
+/// - `BRANCHING_FACTOR`: Number of children per node (must be >= 3). Higher values
+///   improve cache efficiency but use more memory per node. Typical values: 4-16.
+///
+/// ## Example
+/// ```zig
+/// fn i32Compare(a: i32, b: i32) std.math.Order {
+///     return std.math.order(a, b);
+/// }
+/// var map = BTreeMap(i32, []const u8, i32Compare, 4).init(allocator);
+/// ```
 pub fn BTreeMap(
     comptime K: type,
     comptime V: type,
@@ -36,21 +65,32 @@ pub fn BTreeMap(
         allocator: std.mem.Allocator,
         len: usize = 0,
 
+        /// Creates a new empty B-tree map.
+        ///
+        /// The map must be deinitialized with `deinit()` to free allocated memory.
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{ .allocator = allocator };
         }
 
         /// Returns the number of elements in the map.
+        ///
+        /// Time complexity: O(1)
         pub fn count(self: *const Self) usize {
             return self.len;
         }
 
+        /// Frees all memory used by the map.
+        ///
+        /// After calling this, the map is no longer usable. All references to keys
+        /// and values become invalid.
         pub fn deinit(self: *Self) void {
             self.clear();
             self.* = undefined;
         }
 
-        /// Removes all elements from the map.
+        /// Removes all elements from the map while keeping the allocated structure.
+        ///
+        /// Time complexity: O(n)
         pub fn clear(self: *Self) void {
             if (self.root) |r| self.deinitNode(r);
             self.root = null;
@@ -82,7 +122,18 @@ pub fn BTreeMap(
             return compare(key_as_context, item);
         }
 
-        /// Retrieves a pointer to the value associated with `key`.
+        /// Retrieves an immutable pointer to the value associated with the given key.
+        ///
+        /// Returns `null` if the key does not exist in the map.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Example
+        /// ```zig
+        /// if (map.get(42)) |value| {
+        ///     std.debug.print("Value: {}\n", .{value.*});
+        /// }
+        /// ```
         pub fn get(self: *const Self, key: K) ?*const V {
             var current = self.root;
             while (current) |node| {
@@ -97,7 +148,19 @@ pub fn BTreeMap(
             return null;
         }
 
-        /// Retrieves a mutable pointer to the value associated with `key`.
+        /// Retrieves a mutable pointer to the value associated with the given key.
+        ///
+        /// Returns `null` if the key does not exist. The returned pointer can be used
+        /// to modify the value in place without re-inserting.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Example
+        /// ```zig
+        /// if (map.getPtr(42)) |value_ptr| {
+        ///     value_ptr.* += 10;  // Modify in place
+        /// }
+        /// ```
         pub fn getPtr(self: *Self, key: K) ?*V {
             var current = self.root;
             while (current) |node| {
@@ -112,12 +175,25 @@ pub fn BTreeMap(
             return null;
         }
 
-        /// Returns true if the map contains the given key.
+        /// Checks whether the map contains the given key.
+        ///
+        /// Time complexity: O(log n)
         pub fn contains(self: *const Self, key: K) bool {
             return self.get(key) != null;
         }
 
-        /// Inserts a key-value pair. If the key exists, the value is updated.
+        /// Inserts a key-value pair into the map. If the key already exists, updates its value.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if allocation fails.
+        ///
+        /// ## Example
+        /// ```zig
+        /// try map.put(1, "one");
+        /// try map.put(1, "ONE");  // Updates the value
+        /// ```
         pub fn put(self: *Self, key: K, value: V) !void {
             var root_node = if (self.root) |r| r else {
                 const new_node = try self.createNode();
@@ -233,6 +309,18 @@ pub fn BTreeMap(
             }
         }
 
+        /// Removes a key-value pair from the map and returns the value.
+        ///
+        /// Returns `null` if the key does not exist.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Example
+        /// ```zig
+        /// if (map.remove(42)) |value| {
+        ///     std.debug.print("Removed value: {}\n", .{value});
+        /// }
+        /// ```
         pub fn remove(self: *Self, key: K) ?V {
             if (self.root == null) return null;
             const old_len = self.len;

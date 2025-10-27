@@ -1,19 +1,41 @@
+//! A Cartesian Tree (Treap) implementation combining binary search tree and heap properties.
+//!
+//! A Cartesian Tree maintains two orderings simultaneously:
+//! - BST property: keys are ordered (left < parent < right)
+//! - Heap property: priorities determine tree structure (max-heap by default)
+//!
+//! This dual ordering makes it ideal for randomized balanced trees (treaps) and
+//! range minimum/maximum query problems.
+//!
+//! ## Complexity
+//! - Insert: O(log n) expected, O(n) worst case
+//! - Remove: O(log n) expected, O(n) worst case
+//! - Search: O(log n) expected, O(n) worst case
+//! - Space: O(n)
+//!
+//! Note: With random priorities (using `put()`), operations are O(log n) expected.
+//! Worst case O(n) occurs only with adversarial priority assignment.
+//!
+//! ## Use Cases
+//! - Randomized balanced search trees (treaps with random priorities)
+//! - Range minimum/maximum queries
+//! - Persistent data structures (functional programming)
+//! - When you need both ordering and priority-based structure
+//! - Simpler alternative to AVL/Red-Black trees with similar performance
+//!
+//! ## Thread Safety
+//! This data structure is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the tree (via put/remove/clear) while iterating will cause
+//! undefined behavior. Complete all iterations before modifying the structure.
+
 const std = @import("std");
 const testing = std.testing;
 const Allocator = std.mem.Allocator;
 const Order = std.math.Order;
 
-/// A Cartesian Tree implementation that maintains both BST property for keys
-/// and heap property for priorities. Useful for range minimum queries and
-/// as a treap data structure.
-///
-/// ## Thread Safety
-/// This data structure is not thread-safe. External synchronization is required
-/// for concurrent access.
-///
-/// ## Iterator Invalidation
-/// WARNING: Modifying the tree (via put/remove/clear) while iterating will cause
-/// undefined behavior. Complete all iterations before modifying the structure.
 pub fn CartesianTree(comptime K: type, comptime V: type) type {
     return struct {
         const Self = @This();
@@ -38,18 +60,27 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
         allocator: Allocator,
         len: usize = 0,
 
+        /// Creates a new empty Cartesian Tree.
+        ///
+        /// ## Parameters
+        /// - `allocator`: Memory allocator for node allocation
         pub fn init(allocator: Allocator) Self {
             return Self{
                 .allocator = allocator,
             };
         }
 
+        /// Frees all memory used by the tree.
+        ///
+        /// After calling this, the tree is no longer usable.
         pub fn deinit(self: *Self) void {
             self.clear();
             self.* = undefined;
         }
 
         /// Removes all elements from the tree.
+        ///
+        /// Time complexity: O(n)
         pub fn clear(self: *Self) void {
             self.destroySubtree(self.root);
             self.root = null;
@@ -64,13 +95,32 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             }
         }
 
-        /// Insert a key-value pair with random priority
+        /// Inserts a key-value pair with a random priority.
+        ///
+        /// Uses cryptographically random priorities to ensure expected O(log n) performance.
+        /// If the key already exists, updates its value and priority.
+        ///
+        /// Time complexity: O(log n) expected
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, key: K, value: V) !void {
             const priority = std.crypto.random.int(u32);
             try self.putWithPriority(key, value, priority);
         }
 
-        /// Insert a key-value pair with explicit priority
+        /// Inserts a key-value pair with an explicit priority.
+        ///
+        /// Allows manual control over tree structure via priorities. Higher priorities
+        /// are placed closer to the root (max-heap property). Use this for testing or
+        /// when you need deterministic tree structure.
+        ///
+        /// If the key already exists, updates its value and priority.
+        ///
+        /// Time complexity: O(log n) expected with random priorities
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn putWithPriority(self: *Self, key: K, value: V, priority: u32) !void {
             const new_node = try self.allocator.create(Node);
             new_node.* = Node.init(key, value, priority);
@@ -143,7 +193,11 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             }
         }
 
-        /// Get value by key
+        /// Retrieves the value associated with the given key.
+        ///
+        /// Returns `null` if the key doesn't exist.
+        ///
+        /// Time complexity: O(log n) expected
         pub fn get(self: *const Self, key: K) ?V {
             return self.getNode(self.root, key);
         }
@@ -161,7 +215,11 @@ pub fn CartesianTree(comptime K: type, comptime V: type) type {
             };
         }
 
-        /// Get mutable pointer to value by key
+        /// Retrieves a mutable pointer to the value associated with the given key.
+        ///
+        /// Returns `null` if the key doesn't exist. Allows in-place modification of the value.
+        ///
+        /// Time complexity: O(log n) expected
         pub fn getPtr(self: *Self, key: K) ?*V {
             return self.getNodePtr(self.root, key);
         }

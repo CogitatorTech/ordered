@@ -15,7 +15,7 @@ pub fn main() !void {
     _ = try sorted_set.put(100);
     _ = try sorted_set.put(25);
     _ = try sorted_set.put(50);
-    const duplicate = try sorted_set.put(50); // Try adding duplicate
+    const duplicate = try sorted_set.put(50); // Try adding a duplicate
 
     std.debug.print("SortedSet count: {d}\n", .{sorted_set.count()});
     std.debug.print("Added duplicate 50? {any}\n", .{duplicate});

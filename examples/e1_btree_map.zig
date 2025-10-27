@@ -9,7 +9,7 @@ pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     std.debug.print("## BTreeMap Example ##\n", .{});
-    const B = 4; // Branching Factor
+    const B = 4; // Branching Factor for B-tree
     var map = ordered.BTreeMap([]const u8, u32, strCompare, B).init(allocator);
     defer map.deinit();
 

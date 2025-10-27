@@ -1,18 +1,38 @@
 //! A probabilistic data structure built in layers of linked lists.
-//! SkipList offers O(log n) performance on average and is simpler to implement
-//! correctly than balanced binary trees. It uses less memory per-node than B-Trees
-//! and has excellent concurrent-friendly properties.
+//!
+//! Skip lists provide O(log n) search, insertion, and deletion with high probability.
+//! They are simpler to implement than balanced trees and have excellent cache locality.
+//! The probabilistic nature means no complex rebalancing operations are needed.
+//!
+//! ## Complexity
+//! - Insert: O(log n) average, O(n) worst case
+//! - Remove: O(log n) average, O(n) worst case
+//! - Search: O(log n) average, O(n) worst case
+//! - Space: O(n log n) average
+//!
+//! ## Use Cases
+//! - Ordered key-value storage with simpler implementation than trees
+//! - Concurrent data structures (with proper synchronization)
+//! - When you need fast search and insert without rebalancing overhead
 //!
 //! ## Thread Safety
 //! This implementation is not thread-safe. External synchronization is required
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the skip list (via put/delete/clear) while iterating will
+//! WARNING: Modifying the skip list (via put/remove/clear) while iterating will
 //! cause undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
 
+/// Creates a skip list type with specified key, value, comparison function, and max level.
+///
+/// ## Parameters
+/// - `K`: The key type
+/// - `V`: The value type
+/// - `compare`: Comparison function for keys
+/// - `MAX_LEVEL`: Maximum height of the skip list (1-32). Higher values allow more
+///   elements but use more memory. Typical value: 16.
 pub fn SkipList(
     comptime K: type,
     comptime V: type,
@@ -50,10 +70,16 @@ pub fn SkipList(
         rng: std.Random.DefaultPrng,
 
         /// Returns the number of elements in the skip list.
+        ///
+        /// Time complexity: O(1)
         pub fn count(self: *const Self) usize {
             return self.len;
         }
 
+        /// Creates a new empty skip list.
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if allocation fails.
         pub fn init(allocator: std.mem.Allocator) !Self {
             const header = try allocator.create(Node);
             header.key = undefined;

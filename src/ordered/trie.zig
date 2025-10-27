@@ -1,17 +1,43 @@
 //! A Trie (prefix tree) data structure for efficient string storage and retrieval.
-//! Tries excel at prefix-based operations like autocomplete, word validation,
-//! and prefix matching. They provide O(m) complexity where m is the key length.
+//!
+//! Tries are tree structures where each node represents a character in a string. They
+//! excel at prefix-based operations like autocomplete, spell checking, and IP routing.
+//! Unlike hash tables, tries support ordered iteration and prefix queries.
+//!
+//! ## Complexity
+//! - Insert: O(m) where m is key length
+//! - Remove: O(m) where m is key length
+//! - Search: O(m) where m is key length
+//! - Prefix search: O(m + k) where k is number of results
+//! - Space: O(ALPHABET_SIZE * m * n) worst case, much better in practice with shared prefixes
+//!
+//! ## Use Cases
+//! - Autocomplete and typeahead search
+//! - Spell checkers and dictionaries
+//! - IP routing tables (prefix matching)
+//! - String matching and pattern search
+//! - When you need both exact and prefix matching
 //!
 //! ## Thread Safety
 //! This data structure is not thread-safe. External synchronization is required
 //! for concurrent access.
 //!
 //! ## Iterator Invalidation
-//! WARNING: Modifying the trie (via put/delete/clear) while iterating will cause
+//! WARNING: Modifying the trie (via put/remove/clear) while iterating will cause
 //! undefined behavior. Complete all iterations before modifying the structure.
 
 const std = @import("std");
 
+/// Creates a Trie type that maps string keys to values of type V.
+///
+/// ## Example
+/// ```zig
+/// var trie = try Trie([]const u8).init(allocator);
+/// try trie.put("hello", "world");
+/// if (trie.get("hello")) |value| {
+///     std.debug.print("{s}\n", .{value.*});
+/// }
+/// ```
 pub fn Trie(comptime V: type) type {
     return struct {
         const Self = @This();
@@ -44,10 +70,16 @@ pub fn Trie(comptime V: type) type {
         allocator: std.mem.Allocator,
 
         /// Returns the number of elements in the trie.
+        ///
+        /// Time complexity: O(1)
         pub fn count(self: *const Self) usize {
             return self.len;
         }
 
+        /// Creates a new empty trie.
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if allocation fails.
         pub fn init(allocator: std.mem.Allocator) !Self {
             const root = try TrieNode.init(allocator);
             return Self{
@@ -57,18 +89,35 @@ pub fn Trie(comptime V: type) type {
             };
         }
 
+        /// Frees all memory used by the trie.
+        ///
+        /// After calling this, the trie is no longer usable.
         pub fn deinit(self: *Self) void {
             self.root.deinit(self.allocator);
             self.* = undefined;
         }
 
-        /// Removes all elements from the trie.
+        /// Removes all elements from the trie while keeping the root allocated.
+        ///
+        /// Time complexity: O(n) where n is total number of nodes
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if root node reallocation fails.
         pub fn clear(self: *Self) !void {
             self.root.deinit(self.allocator);
             self.root = try TrieNode.init(self.allocator);
             self.len = 0;
         }
 
+        /// Inserts a key-value pair into the trie.
+        ///
+        /// If the key already exists, updates its value. Creates nodes as needed
+        /// for each character in the key.
+        ///
+        /// Time complexity: O(m) where m is the key length
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, key: []const u8, value: V) !void {
             var current = self.root;
 
@@ -87,28 +136,50 @@ pub fn Trie(comptime V: type) type {
             current.is_end = true;
         }
 
+        /// Retrieves an immutable pointer to the value associated with the given key.
+        ///
+        /// Returns `null` if the key doesn't exist.
+        ///
+        /// Time complexity: O(m) where m is the key length
         pub fn get(self: *const Self, key: []const u8) ?*const V {
             const node = self.findNode(key) orelse return null;
             if (!node.is_end) return null;
             return &node.value.?;
         }
 
+        /// Retrieves a mutable pointer to the value associated with the given key.
+        ///
+        /// Returns `null` if the key doesn't exist. Allows in-place modification.
+        ///
+        /// Time complexity: O(m) where m is the key length
         pub fn getPtr(self: *Self, key: []const u8) ?*V {
             const node = self.findNodeMut(key) orelse return null;
             if (!node.is_end) return null;
             return &node.value.?;
         }
 
+        /// Checks whether the trie contains an exact match for the given key.
+        ///
+        /// Time complexity: O(m) where m is the key length
         pub fn contains(self: *const Self, key: []const u8) bool {
             const node = self.findNode(key) orelse return false;
             return node.is_end;
         }
 
+        /// Checks whether any keys in the trie start with the given prefix.
+        ///
+        /// Returns true even if the prefix itself is not a complete key.
+        ///
+        /// Time complexity: O(m) where m is the prefix length
         pub fn hasPrefix(self: *const Self, prefix: []const u8) bool {
             return self.findNode(prefix) != null;
         }
 
         /// Removes a key and returns its value if it existed.
+        ///
+        /// Returns `null` if the key doesn't exist. Prunes nodes that become unnecessary.
+        ///
+        /// Time complexity: O(m) where m is the key length
         pub fn remove(self: *Self, key: []const u8) ?V {
             const result = self.deleteRecursive(self.root, key, 0);
             if (result.deleted) {

@@ -1,18 +1,56 @@
+//! Red-Black Tree - A self-balancing binary search tree.
+//!
+//! Red-Black Trees guarantee O(log n) time complexity for insert, delete, and search
+//! operations by maintaining balance through color properties and rotations. They are
+//! widely used in standard libraries (e.g., C++ std::map, Java TreeMap).
+//!
+//! ## Complexity
+//! - Insert: O(log n)
+//! - Remove: O(log n)
+//! - Search: O(log n)
+//! - Space: O(n)
+//!
+//! ## Properties
+//! 1. Every node is either red or black
+//! 2. The root is always black
+//! 3. All leaves (NIL) are black
+//! 4. Red nodes have black children (no two red nodes in a row)
+//! 5. All paths from root to leaves contain the same number of black nodes
+//!
+//! ## Use Cases
+//! - Ordered set/map with guaranteed O(log n) operations
+//! - When worst-case performance matters more than average case
+//! - Standard library implementations of associative containers
+//!
+//! ## Thread Safety
+//! This data structure is not thread-safe. External synchronization is required
+//! for concurrent access.
+//!
+//! ## Iterator Invalidation
+//! WARNING: Modifying the tree (via put/remove/clear) while iterating will
+//! cause undefined behavior. Complete all iterations before modifying the structure.
+
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const assert = std.debug.assert;
 
-/// Red-Black Tree implementation
-/// A self-balancing binary search tree with O(log n) operations.
+
+/// Creates a Red-Black Tree type for the given data type and comparison context.
 ///
-/// ## Thread Safety
-/// This data structure is not thread-safe. External synchronization is required
-/// for concurrent access.
+/// ## Parameters
+/// - `T`: The data type to store in the tree
+/// - `Context`: A type providing a `lessThan(ctx, a, b) bool` method for comparison
 ///
-/// ## Iterator Invalidation
-/// WARNING: Modifying the tree (via insert/remove/clear) while iterating will
-/// cause undefined behavior. Complete all iterations before modifying the structure.
+/// ## Example
+/// ```zig
+/// const Context = struct {
+///     pub fn lessThan(_: @This(), a: i32, b: i32) bool {
+///         return a < b;
+///     }
+/// };
+/// var tree = RedBlackTree(i32, Context).init(allocator, .{});
+/// ```
 pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
     return struct {
         const Self = @This();
@@ -40,6 +78,11 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         context: Context,
         size: usize,
 
+        /// Creates a new empty Red-Black Tree.
+        ///
+        /// ## Parameters
+        /// - `allocator`: Memory allocator for node allocation
+        /// - `context`: Comparison context instance
         pub fn init(allocator: Allocator, context: Context) Self {
             return Self{
                 .root = null,
@@ -49,10 +92,16 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             };
         }
 
+        /// Frees all memory used by the tree.
+        ///
+        /// After calling this, the tree is no longer usable.
         pub fn deinit(self: *Self) void {
             self.clear();
         }
 
+        /// Removes all elements from the tree.
+        ///
+        /// Time complexity: O(n)
         pub fn clear(self: *Self) void {
             self.clearNode(self.root);
             self.root = null;
@@ -67,11 +116,22 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             }
         }
 
+        /// Returns the number of elements in the tree.
+        ///
+        /// Time complexity: O(1)
         pub fn count(self: Self) usize {
             return self.size;
         }
 
         /// Inserts or updates a value in the tree.
+        ///
+        /// If the value already exists (as determined by the context's lessThan method),
+        /// it will be updated. Otherwise, a new node is created.
+        ///
+        /// Time complexity: O(log n)
+        ///
+        /// ## Errors
+        /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, data: T) !void {
             // Check if key already exists first to avoid unnecessary allocation
             if (self.get(data)) |existing| {
@@ -177,6 +237,10 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         }
 
         /// Removes a value from the tree and returns it if it existed.
+        ///
+        /// Returns `null` if the value is not found.
+        ///
+        /// Time complexity: O(log n)
         pub fn remove(self: *Self, data: T) ?T {
             const node = self.get(data) orelse return null;
             const value = node.data;
@@ -360,6 +424,11 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
         }
 
         /// Returns a pointer to the node containing the data.
+        ///
+        /// Returns `null` if the data is not found. The returned node pointer can be used
+        /// to access or modify the data directly.
+        ///
+        /// Time complexity: O(log n)
         pub fn get(self: Self, data: T) ?*Node {
             var current = self.root;
 
@@ -376,6 +445,9 @@ pub fn RedBlackTree(comptime T: type, comptime Context: type) type {
             return null;
         }
 
+        /// Checks whether the tree contains the given value.
+        ///
+        /// Time complexity: O(log n)
         pub fn contains(self: Self, data: T) bool {
             return self.get(data) != null;
         }

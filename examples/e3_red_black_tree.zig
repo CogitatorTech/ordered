@@ -1,7 +1,7 @@
 const std = @import("std");
 const ordered = @import("ordered");
 
-// Context object for comparison, required by RedBlackTree
+// Context object for comparison. This is needed by RedBlackTree
 const I32Context = struct {
     // This function must be public to be visible from the library code.
     pub fn lessThan(_: @This(), a: i32, b: i32) bool {
