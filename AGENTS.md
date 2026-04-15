@@ -35,7 +35,7 @@ Priorities, in order:
 
 - `src/lib.zig`: Public API entry point. Re-exports `SortedSet`, `RedBlackTreeSet`, `BTreeMap`, `SkipListMap`, `TrieMap`, and `CartesianTreeMap`.
 - `src/ordered/sorted_set.zig`: `SortedSet` (insertion-sorted `std.ArrayList` backed by a linear scan for insert and removal).
-- `src/ordered/red_black_tree_set.zig`: `RedBlackTreeSet` (self-balancing BST).
+- `src/ordered/red_black_tree_set.zig`: `RedBlackTreeSet` (self-balancing BST; takes an explicit three-way comparison function, consistent with the other generic-key containers).
 - `src/ordered/btree_map.zig`: `BTreeMap` (cache-friendly B-tree with configurable branching factor).
 - `src/ordered/skip_list_map.zig`: `SkipListMap` (probabilistic skip list with a per-instance PRNG).
 - `src/ordered/trie_map.zig`: `TrieMap` (prefix tree, specialised for `[]const u8` keys).

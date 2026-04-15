@@ -20,15 +20,12 @@ pub fn main() !void {
     }
 }
 
-const Context = struct {
-    pub fn lessThan(self: @This(), a: i32, b: i32) bool {
-        _ = self;
-        return a < b;
-    }
-};
+fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
+    return std.math.order(lhs, rhs);
+}
 
 fn benchmarkInsert(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.RedBlackTreeSet(i32, Context).init(allocator, Context{});
+    var tree = ordered.RedBlackTreeSet(i32, i32Compare).init(allocator);
     defer tree.deinit();
 
     var timer = try Timer.start();
@@ -50,7 +47,7 @@ fn benchmarkInsert(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkFind(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.RedBlackTreeSet(i32, Context).init(allocator, Context{});
+    var tree = ordered.RedBlackTreeSet(i32, i32Compare).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -79,7 +76,7 @@ fn benchmarkFind(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkRemove(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.RedBlackTreeSet(i32, Context).init(allocator, Context{});
+    var tree = ordered.RedBlackTreeSet(i32, i32Compare).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -106,7 +103,7 @@ fn benchmarkRemove(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkIterator(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.RedBlackTreeSet(i32, Context).init(allocator, Context{});
+    var tree = ordered.RedBlackTreeSet(i32, i32Compare).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;

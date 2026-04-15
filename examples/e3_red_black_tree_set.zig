@@ -1,19 +1,17 @@
 const std = @import("std");
 const ordered = @import("ordered");
 
-// Context object for comparison. This is needed by RedBlackTreeSet
-const I32Context = struct {
-    // This function must be public to be visible from the library code.
-    pub fn lessThan(_: @This(), a: i32, b: i32) bool {
-        return a < b;
-    }
-};
+// Comparison function for the keys. Returns a `std.math.Order` — the same
+// three-way shape used by every other generic-key container in the library.
+fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
+    return std.math.order(lhs, rhs);
+}
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     std.debug.print("## RedBlackTreeSet Example (as a Set) ##\n", .{});
-    var rbt = ordered.RedBlackTreeSet(i32, I32Context).init(allocator, .{});
+    var rbt = ordered.RedBlackTreeSet(i32, i32Compare).init(allocator);
     defer rbt.deinit();
 
     try rbt.put(40);
