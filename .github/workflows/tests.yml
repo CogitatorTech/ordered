@@ -3,6 +3,8 @@ name: Run Tests
 on:
   workflow_dispatch:
   push:
+    branches:
+      - develop
     tags:
       - 'v*'
   pull_request:
