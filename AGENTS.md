@@ -86,22 +86,23 @@ Please do not add dependencies without prior discussion.
 
 - Zig version: 0.16.0 (as declared in `build.zig.zon` and the Makefile's `ZIG_LOCAL` path).
 - Formatting is enforced by `zig fmt`. Run `make format` before committing.
-- Naming follows Zig standard-library conventions: `camelCase` for functions (e.g. `getPtr`, `keysWithPrefix`), `snake_case` for local variables and struct fields, `PascalCase` for types and structs, and `SCREAMING_SNAKE_CASE` for top-level compile-time constants.
+- Naming follows Zig standard-library conventions: `camelCase` for functions (e.g. `getPtr`, `keysWithPrefix`), `snake_case` for local variables and
+  struct fields, `PascalCase` for types and structs, and `SCREAMING_SNAKE_CASE` for top-level compile-time constants.
 
 ## Required Validation
 
 Run the relevant targets for any change:
 
-| Target          | Command                              | What It Runs                                                     |
-|-----------------|--------------------------------------|------------------------------------------------------------------|
-| Unit tests      | `make test`                          | Inline `test` blocks across `src/lib.zig` and `src/ordered/*.zig` |
-| Lint            | `make lint`                          | Checks Zig formatting with `zig fmt --check src examples`        |
-| Single example  | `make run EXAMPLE=e1_btree_map`      | Builds and runs one example program                              |
-| All examples    | `make run`                           | Builds and runs every example under `examples/`                  |
-| Single benchmark| `make bench BENCHMARK=b1_btree_map`  | Builds (ReleaseFast) and runs one benchmark program              |
-| All benchmarks  | `make bench`                         | Builds and runs every benchmark under `benches/`                 |
-| Docs            | `make docs`                          | Generates API docs into `docs/api`                               |
-| Everything      | `make all`                           | Runs `build`, `test`, `lint`, and `docs`                         |
+| Target           | Command                             | What It Runs                                                      |
+|------------------|-------------------------------------|-------------------------------------------------------------------|
+| Unit tests       | `make test`                         | Inline `test` blocks across `src/lib.zig` and `src/ordered/*.zig` |
+| Lint             | `make lint`                         | Checks Zig formatting with `zig fmt --check src examples`         |
+| Single example   | `make run EXAMPLE=e1_btree_map`     | Builds and runs one example program                               |
+| All examples     | `make run`                          | Builds and runs every example under `examples/`                   |
+| Single benchmark | `make bench BENCHMARK=b1_btree_map` | Builds (ReleaseFast) and runs one benchmark program               |
+| All benchmarks   | `make bench`                        | Builds and runs every benchmark under `benches/`                  |
+| Docs             | `make docs`                         | Generates API docs into `docs/api`                                |
+| Everything       | `make all`                          | Runs `build`, `test`, `lint`, and `docs`                          |
 
 ## First Contribution Flow
 
@@ -120,9 +121,12 @@ Good first tasks:
 
 ## Testing Expectations
 
-- Unit and regression tests live as inline `test` blocks in the module they cover (`src/lib.zig` and `src/ordered/*.zig`). There is no separate `tests/` directory.
-- Tests are discovered automatically via `std.testing.refAllDecls(@This())` in `src/lib.zig`, so new `test` blocks only need to live in a module that is reachable from `lib.zig`.
-- Every new public function or container branch must ship with at least one `test` block that exercises it, including the error paths where applicable.
+- Unit and regression tests live as inline `test` blocks in the module they cover (`src/lib.zig` and `src/ordered/*.zig`). There is no separate
+  `tests/` directory.
+- Tests are discovered automatically via `std.testing.refAllDecls(@This())` in `src/lib.zig`, so new `test` blocks only need to live in a module that
+  is reachable from `lib.zig`.
+- Every new public function or container branch must ship with at least one `test` block that exercises it, including the error paths where
+  applicable.
 - Memory tests should use `std.testing.allocator` so leaks are caught automatically.
 - No public API change is complete without a test covering the new or changed behavior.
 
