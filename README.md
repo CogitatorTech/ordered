@@ -9,7 +9,7 @@
 [![Tests](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/tests.yml?label=tests&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/tests.yml)
 [![Benchmarks](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/benches.yml?label=benchmarks&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/benches.yml)
 [![CodeFactor](https://img.shields.io/codefactor/grade/github/CogitatorTech/ordered?label=quality&style=flat&labelColor=282c34&logo=codefactor)](https://www.codefactor.io/repository/github/CogitatorTech/ordered)
-[![Zig Version](https://img.shields.io/badge/Zig-0.15.2-orange?logo=zig&labelColor=282c34)](https://ziglang.org/download/)
+[![Zig Version](https://img.shields.io/badge/Zig-0.16.0-orange?logo=zig&labelColor=282c34)](https://ziglang.org/download/)
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 <br>
 [![Docs](https://img.shields.io/badge/docs-read-blue?style=flat&labelColor=282c34&logo=read-the-docs)](https://CogitatorTech.github.io/ordered/)
@@ -78,8 +78,17 @@ Run the following command in the root directory of your project to download Orde
 zig fetch --save=ordered "https://github.com/CogitatorTech/ordered/archive/<branch_or_tag>.tar.gz"
 ```
 
-Replace `<branch_or_tag>` with the desired branch or release tag, like `main` (for the development version) or `v0.1.0`.
+Replace `<branch_or_tag>` with the desired branch or release tag, like `main` (for the development version) or `v0.2.0`.
 This command will download Ordered and add it to Zig's global cache and update your project's `build.zig.zon` file.
+
+Zig version supported by each tagged release:
+
+| Zig      | Ordered Tags |
+|----------|--------------|
+| `0.16.0` | `v0.2.x`     |
+| `0.15.2` | `v0.1.0`     |
+
+The `main` branch tracks the latest Zig release (currently `0.16.0`).
 
 #### Adding to Build Script
 

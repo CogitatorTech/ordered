@@ -248,21 +248,21 @@ pub fn TrieMap(comptime V: type) type {
             const prefix_node = self.findNode(prefix);
             if (prefix_node == null) {
                 return PrefixIterator{
-                    .stack = std.ArrayList(PrefixIteratorFrame){},
+                    .stack = .empty,
                     .allocator = allocator,
-                    .current_key = std.ArrayList(u8){},
+                    .current_key = .empty,
                     .prefix_len = 0,
                 };
             }
 
-            var stack = std.ArrayList(PrefixIteratorFrame){};
+            var stack: std.ArrayList(PrefixIteratorFrame) = .empty;
             try stack.append(allocator, PrefixIteratorFrame{
                 .node = prefix_node.?,
                 .child_iter = prefix_node.?.children.iterator(),
                 .visited_self = false,
             });
 
-            var current_key = std.ArrayList(u8){};
+            var current_key: std.ArrayList(u8) = .empty;
             try current_key.appendSlice(allocator, prefix);
 
             return PrefixIterator{

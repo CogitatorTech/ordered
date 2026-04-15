@@ -87,7 +87,13 @@ pub fn SkipListMap(
             header.forward = try allocator.alloc(?*Node, MAX_LEVEL);
             @memset(header.forward, null);
 
-            const rng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+            // Seed from a stack-address-derived hash. ASLR makes this differ
+            // across process runs, which is enough randomness for skip-list
+            // level selection. Not a cryptographic RNG.
+            var anchor: u8 = 0;
+            const addr = @intFromPtr(&anchor);
+            const seed: u64 = @truncate(std.hash.Wyhash.hash(0, std.mem.asBytes(&addr)));
+            const rng = std.Random.DefaultPrng.init(seed);
 
             return Self{
                 .header = header,

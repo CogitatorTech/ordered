@@ -59,14 +59,22 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
         root: ?*Node = null,
         allocator: Allocator,
         len: usize = 0,
+        prng: std.Random.DefaultPrng,
 
         /// Creates a new empty Cartesian tree.
         ///
         /// ## Parameters
         /// - `allocator`: Memory allocator for node allocation
         pub fn init(allocator: Allocator) Self {
+            // Seed the per-instance PRNG from a stack-address-derived hash.
+            // ASLR makes this differ across process runs, which is enough
+            // randomness for treap priorities. Not a cryptographic RNG.
+            var anchor: u8 = 0;
+            const addr = @intFromPtr(&anchor);
+            const seed: u64 = @truncate(std.hash.Wyhash.hash(0, std.mem.asBytes(&addr)));
             return Self{
                 .allocator = allocator,
+                .prng = std.Random.DefaultPrng.init(seed),
             };
         }
 
@@ -97,7 +105,7 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
 
         /// Inserts a key-value pair with a random priority.
         ///
-        /// Uses cryptographically random priorities to ensure expected O(log n) performance.
+        /// Uses per-instance PRNG priorities to ensure expected O(log n) performance.
         /// If the key already exists, updates its value and priority.
         ///
         /// Time complexity: O(log n) expected
@@ -105,7 +113,7 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
         /// ## Errors
         /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, key: K, value: V) !void {
-            const priority = std.crypto.random.int(u32);
+            const priority = self.prng.random().int(u32);
             try self.putWithPriority(key, value, priority);
         }
 
@@ -315,7 +323,7 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
 
             pub fn init(allocator: Allocator, root: ?*Node) !Iterator {
                 var it = Iterator{
-                    .stack = std.ArrayList(*Node){},
+                    .stack = .empty,
                     .allocator = allocator,
                 };
                 try it.pushLeft(root);

@@ -482,7 +482,7 @@ pub fn RedBlackTreeSet(comptime T: type, comptime Context: type) type {
 
             pub fn init(allocator: Allocator, root: ?*Node) !Iterator {
                 var it = Iterator{
-                    .stack = .{},
+                    .stack = .empty,
                     .allocator = allocator,
                 };
 

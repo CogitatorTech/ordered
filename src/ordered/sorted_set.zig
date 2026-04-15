@@ -29,7 +29,7 @@ pub fn SortedSet(
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
-                .items = .{},
+                .items = .empty,
                 .allocator = allocator,
             };
         }

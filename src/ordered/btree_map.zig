@@ -528,7 +528,7 @@ pub fn BTreeMap(
             };
 
             fn init(allocator: std.mem.Allocator, root: ?*Node) !Iterator {
-                var stack = std.ArrayList(StackFrame){};
+                var stack: std.ArrayList(StackFrame) = .empty;
 
                 if (root) |r| {
                     try stack.append(allocator, StackFrame{ .node = r, .index = 0 });
