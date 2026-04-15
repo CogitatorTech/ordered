@@ -87,7 +87,7 @@ Zig version supported by each tagged release:
 | `0.16.0` | `v0.2.x`     |
 | `0.15.2` | `v0.1.0`     |
 
-The `main` branch tracks the latest Zig release (currently `0.16.0`).
+The `main` branch normally is developed and build using the latest (non-developmental) Zig release.
 
 #### Adding to Build Script
 
