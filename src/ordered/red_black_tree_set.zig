@@ -379,7 +379,13 @@ pub fn RedBlackTreeSet(comptime T: type, comptime Context: type) type {
         }
 
         fn rotateLeft(self: *Self, node: *Node) void {
-            const right = node.right orelse return;
+            // Left rotation requires the node to have a right child; callers
+            // in `fixInsert` / `fixDelete` must preserve this precondition.
+            // Previously this silently bailed out with `orelse return`, which
+            // could mask a balancing bug by leaving the tree in a subtly
+            // wrong shape.
+            std.debug.assert(node.right != null);
+            const right = node.right.?;
             node.right = right.left;
 
             if (right.left) |left| left.parent = node;
@@ -401,7 +407,11 @@ pub fn RedBlackTreeSet(comptime T: type, comptime Context: type) type {
         }
 
         fn rotateRight(self: *Self, node: *Node) void {
-            const left = node.left orelse return;
+            // Right rotation requires the node to have a left child. See
+            // note in `rotateLeft` for why this is an assertion rather than
+            // a silent early return.
+            std.debug.assert(node.left != null);
+            const left = node.left.?;
             node.left = left.right;
 
             if (left.right) |right| right.parent = node;
@@ -485,6 +495,10 @@ pub fn RedBlackTreeSet(comptime T: type, comptime Context: type) type {
                     .stack = .empty,
                     .allocator = allocator,
                 };
+                // Seeding the stack with the leftmost path issues a loop of
+                // appends. Without this errdefer, an OOM on the second or
+                // later append drops `it` without freeing its heap buffer.
+                errdefer it.stack.deinit(allocator);
 
                 // Initialize stack with leftmost path
                 var node = root;

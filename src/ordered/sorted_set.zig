@@ -59,8 +59,11 @@ pub fn SortedSet(
             return true;
         }
 
-        /// Removes an element at a given index.
-        pub fn remove(self: *Self, index: usize) T {
+        /// Removes an element at a given index and returns it.
+        ///
+        /// Returns `null` if `index` is out of bounds.
+        pub fn remove(self: *Self, index: usize) ?T {
+            if (index >= self.items.items.len) return null;
             return self.items.orderedRemove(index);
         }
 
@@ -68,7 +71,9 @@ pub fn SortedSet(
         /// Returns null if the value was not found.
         pub fn removeValue(self: *Self, value: T) ?T {
             const index = self.findIndex(value) orelse return null;
-            return self.remove(index);
+            // `remove` returns an optional for out-of-bounds safety, but the
+            // index came from `findIndex` which guarantees it is in range.
+            return self.remove(index).?;
         }
 
         /// Returns true if the set contains the given value.
@@ -216,6 +221,22 @@ test "SortedSet: remove boundary cases" {
     // Remove middle
     _ = set.remove(1);
     try std.testing.expectEqualSlices(i32, &.{ 2, 4 }, set.items.items);
+}
+
+test "regression: SortedSet remove returns null for out-of-bounds index" {
+    // Bug B9: `remove(index)` used to call `orderedRemove` directly, which
+    // panics on OOB. Now it returns null.
+    const allocator = std.testing.allocator;
+    var set = SortedSet(i32, i32Compare).init(allocator);
+    defer set.deinit();
+
+    try std.testing.expect(set.remove(0) == null);
+    try std.testing.expect(set.remove(99) == null);
+
+    _ = try set.put(10);
+    try std.testing.expect(set.remove(1) == null);
+    try std.testing.expect(set.remove(0) != null);
+    try std.testing.expect(set.remove(0) == null);
 }
 
 test "SortedSet: removeValue method" {

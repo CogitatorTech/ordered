@@ -36,7 +36,11 @@ const testing = std.testing;
 const Allocator = std.mem.Allocator;
 const Order = std.math.Order;
 
-pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
+pub fn CartesianTreeMap(
+    comptime K: type,
+    comptime V: type,
+    comptime compare: fn (lhs: K, rhs: K) std.math.Order,
+) type {
     return struct {
         const Self = @This();
 
@@ -139,17 +143,17 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
                 return;
             }
 
-            self.root = try self.insertNode(self.root, new_node);
+            self.root = self.insertNode(self.root, new_node);
         }
 
-        fn insertNode(self: *Self, root: ?*Node, new_node: *Node) !?*Node {
+        fn insertNode(self: *Self, root: ?*Node, new_node: *Node) ?*Node {
             if (root == null) {
                 self.len += 1;
                 return new_node;
             }
 
             const node = root.?;
-            const key_cmp = std.math.order(new_node.key, node.key);
+            const key_cmp = compare(new_node.key, node.key);
 
             if (key_cmp == .eq) {
                 // Replace existing value
@@ -169,9 +173,9 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
             }
 
             if (key_cmp == .lt) {
-                node.left = try self.insertNode(node.left, new_node);
+                node.left = self.insertNode(node.left, new_node);
             } else {
-                node.right = try self.insertNode(node.right, new_node);
+                node.right = self.insertNode(node.right, new_node);
             }
 
             return root;
@@ -188,7 +192,7 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
             }
 
             const node = root.?;
-            const key_cmp = std.math.order(key, node.key);
+            const key_cmp = compare(key, node.key);
 
             if (key_cmp == .lt) {
                 const split_result = self.split(node.left, key);
@@ -214,7 +218,7 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
             if (root == null) return null;
 
             const node = root.?;
-            const key_cmp = std.math.order(key, node.key);
+            const key_cmp = compare(key, node.key);
 
             return switch (key_cmp) {
                 .eq => node.value,
@@ -237,7 +241,7 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
             if (root == null) return null;
 
             const node = root.?;
-            const key_cmp = std.math.order(key, node.key);
+            const key_cmp = compare(key, node.key);
 
             return switch (key_cmp) {
                 .eq => &node.value,
@@ -264,7 +268,7 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
             }
 
             const node = root.?;
-            const key_cmp = std.math.order(key, node.key);
+            const key_cmp = compare(key, node.key);
 
             if (key_cmp == .eq) {
                 const value = node.value;
@@ -326,6 +330,10 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
                     .stack = .empty,
                     .allocator = allocator,
                 };
+                // `pushLeft` issues a sequence of `stack.append`s; without
+                // this errdefer, the heap buffer leaks if the second or
+                // later append hits OOM.
+                errdefer it.stack.deinit(allocator);
                 try it.pushLeft(root);
                 return it;
             }
@@ -366,8 +374,12 @@ pub fn CartesianTreeMap(comptime K: type, comptime V: type) type {
     };
 }
 
+fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
+    return std.math.order(lhs, rhs);
+}
+
 test "CartesianTreeMap basic operations" {
-    var tree = CartesianTreeMap(i32, []const u8).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, []const u8, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     // Test insertion and retrieval
@@ -396,7 +408,7 @@ test "CartesianTreeMap basic operations" {
 }
 
 test "CartesianTreeMap: empty tree operations" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     try testing.expect(tree.isEmpty());
@@ -407,7 +419,7 @@ test "CartesianTreeMap: empty tree operations" {
 }
 
 test "CartesianTreeMap: single element" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(42, 100, 50);
@@ -421,7 +433,7 @@ test "CartesianTreeMap: single element" {
 }
 
 test "CartesianTreeMap: priority ordering" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     // Higher priority should be closer to root
@@ -434,7 +446,7 @@ test "CartesianTreeMap: priority ordering" {
 }
 
 test "CartesianTreeMap: update existing key with different priority" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(10, 100, 50);
@@ -445,7 +457,7 @@ test "CartesianTreeMap: update existing key with different priority" {
 }
 
 test "CartesianTreeMap: random priorities with put" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     // Using put which generates random priorities
@@ -460,7 +472,7 @@ test "CartesianTreeMap: random priorities with put" {
 }
 
 test "CartesianTreeMap: sequential keys" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -477,7 +489,7 @@ test "CartesianTreeMap: sequential keys" {
 }
 
 test "CartesianTreeMap: remove non-existent key" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(10, 10, 10);
@@ -489,7 +501,7 @@ test "CartesianTreeMap: remove non-existent key" {
 }
 
 test "CartesianTreeMap: remove all elements" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(1, 1, 1);
@@ -505,7 +517,7 @@ test "CartesianTreeMap: remove all elements" {
 }
 
 test "CartesianTreeMap: negative keys" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(-10, 10, 100);
@@ -518,7 +530,7 @@ test "CartesianTreeMap: negative keys" {
 }
 
 test "CartesianTreeMap: iterator traversal" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     try tree.putWithPriority(30, 30, 30);
@@ -540,7 +552,7 @@ test "CartesianTreeMap: iterator traversal" {
 }
 
 test "CartesianTreeMap: large dataset" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -557,7 +569,7 @@ test "CartesianTreeMap: large dataset" {
 }
 
 test "CartesianTreeMap: same priorities different keys" {
-    var tree = CartesianTreeMap(i32, i32).init(testing.allocator);
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(testing.allocator);
     defer tree.deinit();
 
     // When priorities are equal, BST property still maintained by key
