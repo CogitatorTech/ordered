@@ -81,7 +81,7 @@ This command will download Ordered and add it to Zig's global cache and update y
 
 ##### Zig Version Support
 
-Zig version supported by the main releases of Minish:
+Zig version supported by the main releases of Ordered:
 
 | Zig      | Ordered Tags |
 |----------|--------------|
