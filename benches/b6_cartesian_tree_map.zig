@@ -1,9 +1,13 @@
 const std = @import("std");
 const ordered = @import("ordered");
-const Timer = std.time.Timer;
+const Timer = @import("util/timer.zig").Timer;
+
+fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
+    return std.math.order(lhs, rhs);
+}
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
@@ -21,7 +25,7 @@ pub fn main() !void {
 }
 
 fn benchmarkPut(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.CartesianTreeMap(i32, i32).init(allocator);
+    var tree = ordered.CartesianTreeMap(i32, i32, i32Compare).init(allocator);
     defer tree.deinit();
 
     var timer = try Timer.start();
@@ -43,7 +47,7 @@ fn benchmarkPut(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkGet(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.CartesianTreeMap(i32, i32).init(allocator);
+    var tree = ordered.CartesianTreeMap(i32, i32, i32Compare).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -72,7 +76,7 @@ fn benchmarkGet(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkRemove(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.CartesianTreeMap(i32, i32).init(allocator);
+    var tree = ordered.CartesianTreeMap(i32, i32, i32Compare).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;
@@ -99,7 +103,7 @@ fn benchmarkRemove(allocator: std.mem.Allocator, size: usize) !void {
 }
 
 fn benchmarkIterator(allocator: std.mem.Allocator, size: usize) !void {
-    var tree = ordered.CartesianTreeMap(i32, i32).init(allocator);
+    var tree = ordered.CartesianTreeMap(i32, i32, i32Compare).init(allocator);
     defer tree.deinit();
 
     var i: i32 = 0;

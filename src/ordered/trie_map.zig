@@ -121,7 +121,13 @@ pub fn TrieMap(comptime V: type) type {
             for (key) |char| {
                 if (!current.children.contains(char)) {
                     const new_node = try TrieNode.init(self.allocator);
-                    try current.children.put(char, new_node);
+                    // If the hashmap put fails (OOM), the freshly allocated
+                    // `new_node` is not yet attached to any parent and would
+                    // be orphaned; free it explicitly before propagating.
+                    current.children.put(char, new_node) catch |err| {
+                        new_node.deinit(self.allocator);
+                        return err;
+                    };
                 }
                 current = current.children.get(char).?;
             }
@@ -248,21 +254,26 @@ pub fn TrieMap(comptime V: type) type {
             const prefix_node = self.findNode(prefix);
             if (prefix_node == null) {
                 return PrefixIterator{
-                    .stack = std.ArrayList(PrefixIteratorFrame){},
+                    .stack = .empty,
                     .allocator = allocator,
-                    .current_key = std.ArrayList(u8){},
+                    .current_key = .empty,
                     .prefix_len = 0,
                 };
             }
 
-            var stack = std.ArrayList(PrefixIteratorFrame){};
+            var stack: std.ArrayList(PrefixIteratorFrame) = .empty;
+            // On any error after this point, free the stack buffer; it is
+            // not yet owned by the returned PrefixIterator.
+            errdefer stack.deinit(allocator);
             try stack.append(allocator, PrefixIteratorFrame{
                 .node = prefix_node.?,
                 .child_iter = prefix_node.?.children.iterator(),
                 .visited_self = false,
             });
 
-            var current_key = std.ArrayList(u8){};
+            var current_key: std.ArrayList(u8) = .empty;
+            // Same rationale as `stack` above.
+            errdefer current_key.deinit(allocator);
             try current_key.appendSlice(allocator, prefix);
 
             return PrefixIterator{

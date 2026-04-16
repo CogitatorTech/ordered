@@ -48,8 +48,20 @@ pub fn BTreeMap(
     comptime compare: fn (lhs: K, rhs: K) std.math.Order,
     comptime BRANCHING_FACTOR: u16,
 ) type {
-    std.debug.assert(BRANCHING_FACTOR >= 3);
-    const MIN_KEYS = (BRANCHING_FACTOR - 1) / 2;
+    comptime {
+        if (BRANCHING_FACTOR < 4) {
+            @compileError("BTreeMap: BRANCHING_FACTOR must be at least 4");
+        }
+    }
+    // Minimum keys per non-root node.
+    //
+    // We pick this so that `2 * MIN_KEYS + 1` (the size of a merge of two
+    // MIN_KEYS siblings plus the pulled-down separator) always fits in the
+    // `BRANCHING_FACTOR - 1`-element key array. For even B this simplifies
+    // to `(B - 1) / 2` — identical to the common textbook formula. For odd
+    // B it relaxes MIN_KEYS by one compared to the textbook, which avoids
+    // an over-full node after merge at the cost of slightly looser packing.
+    const MIN_KEYS = (BRANCHING_FACTOR - 2) / 2;
 
     return struct {
         const Self = @This();
@@ -528,7 +540,12 @@ pub fn BTreeMap(
             };
 
             fn init(allocator: std.mem.Allocator, root: ?*Node) !Iterator {
-                var stack = std.ArrayList(StackFrame){};
+                var stack: std.ArrayList(StackFrame) = .empty;
+                // If any append below fails after the first, the local
+                // `stack` goes out of scope without being moved into the
+                // returned Iterator; its heap buffer would leak without
+                // this errdefer.
+                errdefer stack.deinit(allocator);
 
                 if (root) |r| {
                     try stack.append(allocator, StackFrame{ .node = r, .index = 0 });
@@ -782,4 +799,63 @@ test "BTreeMap: negative keys" {
 
     try std.testing.expectEqual(@as(i32, 10), map.get(-10).?.*);
     try std.testing.expectEqual(@as(i32, -5), map.get(5).?.*);
+}
+
+test "regression: BTreeMap deletion works with odd BRANCHING_FACTOR" {
+    // Bug B1: the old `MIN_KEYS = (B-1)/2` formula combined with the split
+    // layout left odd-B right siblings underfull; a subsequent deletion that
+    // merged two MIN_KEYS siblings plus a separator overflowed the
+    // `[B-1]K` keys array, panicking at merge time. This test exercises
+    // the exact path that used to crash for B=5.
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 5).init(allocator);
+    defer map.deinit();
+
+    // Fill, split, then fill again so both halves are at MIN_KEYS.
+    try map.put(0, 0);
+    try map.put(1, 1);
+    try map.put(2, 2);
+    try map.put(3, 3);
+    try map.put(4, 4);
+    try std.testing.expectEqual(@as(usize, 5), map.count());
+
+    // Delete from the right side: this forces the merge path.
+    try std.testing.expectEqual(@as(i32, 4), map.remove(4).?);
+    try std.testing.expectEqual(@as(usize, 4), map.count());
+
+    // Verify the remaining tree is intact and ordered.
+    try std.testing.expectEqual(@as(i32, 0), map.get(0).?.*);
+    try std.testing.expectEqual(@as(i32, 1), map.get(1).?.*);
+    try std.testing.expectEqual(@as(i32, 2), map.get(2).?.*);
+    try std.testing.expectEqual(@as(i32, 3), map.get(3).?.*);
+    try std.testing.expect(map.get(4) == null);
+}
+
+test "regression: BTreeMap sequential delete with odd B stays valid" {
+    // Larger stress: insert 200 items with B=7 (odd, previously broken),
+    // delete half in random-ish order, then confirm the remainder is still
+    // accessible and ordered.
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 7).init(allocator);
+    defer map.deinit();
+
+    var i: i32 = 0;
+    while (i < 200) : (i += 1) {
+        try map.put(i, i * 2);
+    }
+    try std.testing.expectEqual(@as(usize, 200), map.count());
+
+    // Delete every other item in ascending order.
+    i = 0;
+    while (i < 200) : (i += 2) {
+        const v = map.remove(i);
+        try std.testing.expectEqual(@as(i32, i * 2), v.?);
+    }
+    try std.testing.expectEqual(@as(usize, 100), map.count());
+
+    // Remaining items must still be reachable with correct values.
+    i = 1;
+    while (i < 200) : (i += 2) {
+        try std.testing.expectEqual(@as(i32, i * 2), map.get(i).?.*);
+    }
 }

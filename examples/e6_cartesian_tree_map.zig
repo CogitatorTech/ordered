@@ -1,11 +1,15 @@
 const std = @import("std");
 const ordered = @import("ordered");
 
+fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
+    return std.math.order(lhs, rhs);
+}
+
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     std.debug.print("## CartesianTreeMap Example ##\n", .{});
-    var cartesian_tree = ordered.CartesianTreeMap(i32, []const u8).init(allocator);
+    var cartesian_tree = ordered.CartesianTreeMap(i32, []const u8, i32Compare).init(allocator);
     defer cartesian_tree.deinit();
 
     try cartesian_tree.put(50, "fifty");

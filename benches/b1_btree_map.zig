@@ -1,9 +1,9 @@
 const std = @import("std");
 const ordered = @import("ordered");
-const Timer = std.time.Timer;
+const Timer = @import("util/timer.zig").Timer;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
