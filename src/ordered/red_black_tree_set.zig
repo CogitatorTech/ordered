@@ -133,7 +133,7 @@ pub fn RedBlackTreeSet(
         /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, data: T) !void {
             // Check if key already exists first to avoid unnecessary allocation
-            if (self.get(data)) |existing| {
+            if (self.getNode(data)) |existing| {
                 existing.data = data;
                 return;
             }
@@ -241,7 +241,7 @@ pub fn RedBlackTreeSet(
         ///
         /// Time complexity: O(log n)
         pub fn remove(self: *Self, data: T) ?T {
-            const node = self.get(data) orelse return null;
+            const node = self.getNode(data) orelse return null;
             const value = node.data;
             self.removeNode(node);
             self.size -= 1;
@@ -432,13 +432,24 @@ pub fn RedBlackTreeSet(
             node.parent = left;
         }
 
-        /// Returns a pointer to the node containing the data.
-        ///
-        /// Returns `null` if the data is not found. The returned node pointer can be used
-        /// to access or modify the data directly.
+        /// Returns an immutable pointer to the stored value that compares equal
+        /// to `data`, or `null` if no such value exists.
         ///
         /// Time complexity: O(log n)
-        pub fn get(self: *const Self, data: T) ?*Node {
+        pub fn get(self: *const Self, data: T) ?*const T {
+            const node = self.getNode(data) orelse return null;
+            return &node.data;
+        }
+
+        /// Checks whether the tree contains the given value.
+        ///
+        /// Time complexity: O(log n)
+        pub fn contains(self: *const Self, data: T) bool {
+            return self.getNode(data) != null;
+        }
+
+        /// Internal: returns the node pointer for mutation by `put` and `remove`.
+        fn getNode(self: *const Self, data: T) ?*Node {
             var current = self.root;
 
             while (current) |node| {
@@ -452,13 +463,6 @@ pub fn RedBlackTreeSet(
             return null;
         }
 
-        /// Checks whether the tree contains the given value.
-        ///
-        /// Time complexity: O(log n)
-        pub fn contains(self: *const Self, data: T) bool {
-            return self.get(data) != null;
-        }
-
         fn findMinimum(self: *const Self, node: *Node) *Node {
             _ = self; // Mark as intentionally unused
             var current = node;
@@ -468,19 +472,25 @@ pub fn RedBlackTreeSet(
             return current;
         }
 
-        pub fn minimum(self: Self, node: ?*Node) ?*Node {
-            const start = node orelse self.root orelse return null;
-            return self.findMinimum(start);
+        /// Returns the smallest value in the tree, or `null` if the tree is empty.
+        ///
+        /// Time complexity: O(log n)
+        pub fn minimum(self: *const Self) ?T {
+            const start = self.root orelse return null;
+            return self.findMinimum(start).data;
         }
 
-        pub fn maximum(self: Self, node: ?*Node) ?*Node {
-            var current = node orelse self.root orelse return null;
+        /// Returns the largest value in the tree, or `null` if the tree is empty.
+        ///
+        /// Time complexity: O(log n)
+        pub fn maximum(self: *const Self) ?T {
+            var current = self.root orelse return null;
 
             while (current.right) |right| {
                 current = right;
             }
 
-            return current;
+            return current.data;
         }
 
         /// Iterator for in-order traversal
@@ -512,7 +522,7 @@ pub fn RedBlackTreeSet(
                 self.stack.deinit(self.allocator);
             }
 
-            pub fn next(self: *Iterator) !?*Node {
+            pub fn next(self: *Iterator) !?T {
                 if (self.stack.items.len == 0) return null;
 
                 const node: *Node = self.stack.pop().?;
@@ -524,7 +534,7 @@ pub fn RedBlackTreeSet(
                     current = n.left;
                 }
 
-                return node;
+                return node.data;
             }
         };
 
@@ -670,13 +680,13 @@ test "RedBlackTreeSet: minimum and maximum" {
     try tree.put(3);
     try tree.put(20);
 
-    const min = tree.minimum(null);
-    const max = tree.maximum(null);
+    const min = tree.minimum();
+    const max = tree.maximum();
 
     try std.testing.expect(min != null);
     try std.testing.expect(max != null);
-    try std.testing.expectEqual(@as(i32, 3), min.?.data);
-    try std.testing.expectEqual(@as(i32, 20), max.?.data);
+    try std.testing.expectEqual(@as(i32, 3), min.?);
+    try std.testing.expectEqual(@as(i32, 20), max.?);
 }
 
 test "RedBlackTreeSet: iterator empty tree" {
@@ -720,7 +730,7 @@ test "RedBlackTreeSet: negative numbers" {
     try std.testing.expect(tree.contains(0));
 }
 
-test "RedBlackTreeSet: get returns correct node" {
+test "RedBlackTreeSet: get returns correct value" {
     const allocator = std.testing.allocator;
     var tree = RedBlackTreeSet(i32, i32Compare).init(allocator);
     defer tree.deinit();
@@ -728,7 +738,9 @@ test "RedBlackTreeSet: get returns correct node" {
     try tree.put(10);
     try tree.put(20);
 
-    const node = tree.get(10);
-    try std.testing.expect(node != null);
-    try std.testing.expectEqual(@as(i32, 10), node.?.data);
+    const ptr = tree.get(10);
+    try std.testing.expect(ptr != null);
+    try std.testing.expectEqual(@as(i32, 10), ptr.?.*);
+
+    try std.testing.expect(tree.get(99) == null);
 }
