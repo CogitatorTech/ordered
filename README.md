@@ -79,7 +79,9 @@ zig fetch --save=ordered "https://github.com/CogitatorTech/ordered/archive/<bran
 Replace `<branch_or_tag>` with the desired branch or release tag, like `main` (for the development version) or `v0.3.0`.
 This command will download Ordered and add it to Zig's global cache and update your project's `build.zig.zon` file.
 
-Zig version supported by each tagged release:
+##### Zig Version Support
+
+Zig version supported by the main releases of Minish:
 
 | Zig      | Ordered Tags |
 |----------|--------------|
