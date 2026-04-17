@@ -8,7 +8,7 @@
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/tests.yml?label=tests&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/tests.yml)
 [![Benchmarks](https://img.shields.io/github/actions/workflow/status/CogitatorTech/ordered/benches.yml?label=benchmarks&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/actions/workflows/benches.yml)
-[![Zig Version](https://img.shields.io/badge/Zig-0.16.0-orange?logo=zig&labelColor=282c34)](https://ziglang.org/download/)
+[![Zig](https://img.shields.io/badge/zig-0.16.0-F7A41D?style=flat&labelColor=282c34&logo=zig)](https://ziglang.org/download/)
 [![Release](https://img.shields.io/github/release/CogitatorTech/ordered.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/CogitatorTech/ordered/releases/latest)
 [![Docs](https://img.shields.io/badge/docs-read-blue?style=flat&labelColor=282c34&logo=read-the-docs)](https://CogitatorTech.github.io/ordered/)
 [![Examples](https://img.shields.io/badge/examples-view-green?style=flat&labelColor=282c34&logo=zig)](https://github.com/CogitatorTech/ordered/tree/main/examples)
