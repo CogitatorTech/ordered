@@ -267,7 +267,7 @@ pub fn TrieMap(comptime V: type) type {
             errdefer stack.deinit(allocator);
             try stack.append(allocator, PrefixIteratorFrame{
                 .node = prefix_node.?,
-                .child_iter = prefix_node.?.children.iterator(),
+                .next_char = 0,
                 .visited_self = false,
             });
 
@@ -286,7 +286,9 @@ pub fn TrieMap(comptime V: type) type {
 
         pub const PrefixIteratorFrame = struct {
             node: *const TrieNode,
-            child_iter: std.HashMap(u8, *TrieNode, std.hash_map.AutoContext(u8), std.hash_map.default_max_load_percentage).Iterator,
+            // Next child byte to examine, scanned over 0..256 so children are
+            // visited in ascending byte order, yielding keys in sorted order.
+            next_char: u16,
             visited_self: bool,
         };
 
@@ -303,22 +305,34 @@ pub fn TrieMap(comptime V: type) type {
 
             pub fn next(self: *PrefixIterator) !?[]const u8 {
                 while (self.stack.items.len > 0) {
-                    var frame = &self.stack.items[self.stack.items.len - 1];
+                    const top = self.stack.items.len - 1;
 
-                    if (!frame.visited_self and frame.node.is_end) {
-                        frame.visited_self = true;
+                    if (!self.stack.items[top].visited_self and self.stack.items[top].node.is_end) {
+                        self.stack.items[top].visited_self = true;
                         return self.current_key.items;
                     }
 
-                    if (frame.child_iter.next()) |entry| {
-                        const char = entry.key_ptr.*;
-                        const child = entry.value_ptr.*;
+                    // Scan ascending byte values for the next existing child.
+                    const node = self.stack.items[top].node;
+                    var next_child: ?*TrieNode = null;
+                    var next_byte: u8 = 0;
+                    while (self.stack.items[top].next_char < 256) {
+                        const char: u8 = @intCast(self.stack.items[top].next_char);
+                        self.stack.items[top].next_char += 1;
+                        if (node.children.get(char)) |child| {
+                            next_child = child;
+                            next_byte = char;
+                            break;
+                        }
+                    }
 
-                        try self.current_key.append(self.allocator, char);
-
+                    if (next_child) |child| {
+                        try self.current_key.append(self.allocator, next_byte);
+                        // This append may reallocate `stack`, so `top` is
+                        // recomputed on the next loop iteration rather than reused.
                         try self.stack.append(self.allocator, PrefixIteratorFrame{
                             .node = child,
-                            .child_iter = child.children.iterator(),
+                            .next_char = 0,
                             .visited_self = false,
                         });
                     } else {
@@ -692,4 +706,26 @@ test "TrieMap: special characters" {
     try std.testing.expectEqual(@as(i32, 1), trie.get("hello-world").?.*);
     try std.testing.expectEqual(@as(i32, 2), trie.get("test_case").?.*);
     try std.testing.expectEqual(@as(i32, 3), trie.get("foo.bar").?.*);
+}
+
+test "TrieMap: keysWithPrefix yields keys in sorted order" {
+    const allocator = std.testing.allocator;
+    var trie = try TrieMap(i32).init(allocator);
+    defer trie.deinit();
+
+    // Insert in an order that is neither sorted nor hash order.
+    const keys = [_][]const u8{ "bandit", "ban", "bandana", "band", "banana", "bee", "apex" };
+    for (keys, 0..) |k, i| try trie.put(k, @intCast(i));
+
+    var iter = try trie.keysWithPrefix(allocator, "ban");
+    defer iter.deinit();
+
+    // Keys under the "ban" prefix must come out in lexicographic order.
+    const expected = [_][]const u8{ "ban", "banana", "band", "bandana", "bandit" };
+    var idx: usize = 0;
+    while (try iter.next()) |k| : (idx += 1) {
+        try std.testing.expect(idx < expected.len);
+        try std.testing.expectEqualStrings(expected[idx], k);
+    }
+    try std.testing.expectEqual(expected.len, idx);
 }
