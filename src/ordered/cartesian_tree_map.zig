@@ -134,6 +134,17 @@ pub fn CartesianTreeMap(
         /// ## Errors
         /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn putWithPriority(self: *Self, key: K, value: V, priority: u32) !void {
+            // Update in place if the key already exists. Resolving duplicates up
+            // front is required for correctness: `insertNode` only detects an
+            // equal key at the node it is currently visiting, so once the new
+            // priority exceeds an ancestor's priority it would split and insert
+            // a second node with the same key.
+            if (self.findNode(key)) |existing| {
+                existing.value = value;
+                existing.priority = priority;
+                return;
+            }
+
             const new_node = try self.allocator.create(Node);
             new_node.* = Node.init(key, value, priority);
 
@@ -144,6 +155,18 @@ pub fn CartesianTreeMap(
             }
 
             self.root = self.insertNode(self.root, new_node);
+        }
+
+        fn findNode(self: *Self, key: K) ?*Node {
+            var current = self.root;
+            while (current) |node| {
+                switch (compare(key, node.key)) {
+                    .eq => return node,
+                    .lt => current = node.left,
+                    .gt => current = node.right,
+                }
+            }
+            return null;
         }
 
         fn insertNode(self: *Self, root: ?*Node, new_node: *Node) ?*Node {
@@ -376,6 +399,65 @@ pub fn CartesianTreeMap(
 
 fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
     return std.math.order(lhs, rhs);
+}
+
+const MapOracle = @import("oracle.zig").MapOracle;
+
+test "CartesianTreeMap: differential test against sorted-array oracle" {
+    const allocator = testing.allocator;
+    var tree = CartesianTreeMap(i32, i32, i32Compare).init(allocator);
+    defer tree.deinit();
+
+    var oracle: MapOracle(i32, i32, i32Compare) = .{};
+    defer oracle.deinit(allocator);
+
+    // The treap seeds its own PRNG internally for priorities; this separate
+    // PRNG only drives the operation sequence and is fixed-seed for determinism.
+    var prng = std.Random.DefaultPrng.init(0xca27_e51a_7700_0000);
+    const random = prng.random();
+
+    const operations = 3000;
+    const key_space: u32 = 200;
+
+    var op: usize = 0;
+    while (op < operations) : (op += 1) {
+        const key: i32 = @intCast(random.uintLessThan(u32, key_space));
+        const value: i32 = @intCast(op);
+
+        if (random.uintLessThan(u32, 3) == 0) {
+            const removed = tree.remove(key);
+            const oracle_removed = oracle.remove(key);
+            try testing.expectEqual(oracle_removed != null, removed != null);
+            if (oracle_removed) |ov| try testing.expectEqual(ov, removed.?);
+        } else {
+            try tree.put(key, value);
+            try oracle.put(allocator, key, value);
+        }
+
+        try testing.expectEqual(oracle.count(), tree.count());
+        if (oracle.get(key)) |ov| {
+            try testing.expectEqual(ov, tree.get(key).?);
+        } else {
+            try testing.expect(tree.get(key) == null);
+        }
+
+        var iter = try tree.iterator(allocator);
+        defer iter.deinit();
+        var idx: usize = 0;
+        while (try iter.next()) |entry| : (idx += 1) {
+            try testing.expect(idx < oracle.entries.items.len);
+            try testing.expectEqual(oracle.entries.items[idx].key, entry.key);
+            try testing.expectEqual(oracle.entries.items[idx].value, entry.value);
+        }
+        try testing.expectEqual(oracle.entries.items.len, idx);
+
+        if (op % 100 == 0) {
+            var k: i32 = 0;
+            while (k < @as(i32, @intCast(key_space))) : (k += 1) {
+                try testing.expectEqual(oracle.contains(k), tree.contains(k));
+            }
+        }
+    }
 }
 
 test "CartesianTreeMap basic operations" {

@@ -340,22 +340,29 @@ pub fn TrieMap(comptime V: type) type {
 
             const IteratorFrame = struct {
                 node: *const TrieNode,
-                child_iter: std.HashMap(u8, *TrieNode, std.hash_map.AutoContext(u8), std.hash_map.default_max_load_percentage).Iterator,
+                // Next child byte to examine, scanned over 0..256 so children
+                // are visited in ascending byte order. This makes the iterator
+                // yield keys in sorted (lexicographic) order, which a HashMap
+                // child iterator would not.
+                next_char: u16,
                 visited_self: bool,
             };
 
             fn init(allocator: std.mem.Allocator, root: *const TrieNode) !Iterator {
-                var stack: std.ArrayList(IteratorFrame) = .{};
+                var stack: std.ArrayList(IteratorFrame) = .empty;
+                // The append below may fail with OOM; without this errdefer the
+                // stack's heap buffer would leak before the Iterator is returned.
+                errdefer stack.deinit(allocator);
                 try stack.append(allocator, IteratorFrame{
                     .node = root,
-                    .child_iter = root.children.iterator(),
+                    .next_char = 0,
                     .visited_self = false,
                 });
 
                 return Iterator{
                     .stack = stack,
                     .allocator = allocator,
-                    .current_key = .{},
+                    .current_key = .empty,
                 };
             }
 
@@ -366,22 +373,38 @@ pub fn TrieMap(comptime V: type) type {
 
             pub fn next(self: *Iterator) !?struct { key: []const u8, value: V } {
                 while (self.stack.items.len > 0) {
-                    var frame = &self.stack.items[self.stack.items.len - 1];
+                    const top = self.stack.items.len - 1;
 
-                    if (!frame.visited_self and frame.node.is_end) {
-                        frame.visited_self = true;
-                        return .{ .key = self.current_key.items, .value = frame.node.value.? };
+                    if (!self.stack.items[top].visited_self and self.stack.items[top].node.is_end) {
+                        self.stack.items[top].visited_self = true;
+                        return .{
+                            .key = self.current_key.items,
+                            .value = self.stack.items[top].node.value.?,
+                        };
                     }
 
-                    if (frame.child_iter.next()) |entry| {
-                        const char = entry.key_ptr.*;
-                        const child = entry.value_ptr.*;
+                    // Scan ascending byte values for the next existing child.
+                    const node = self.stack.items[top].node;
+                    var next_child: ?*TrieNode = null;
+                    var next_byte: u8 = 0;
+                    while (self.stack.items[top].next_char < 256) {
+                        const char: u8 = @intCast(self.stack.items[top].next_char);
+                        self.stack.items[top].next_char += 1;
+                        if (node.children.get(char)) |child| {
+                            next_child = child;
+                            next_byte = char;
+                            break;
+                        }
+                    }
 
-                        try self.current_key.append(self.allocator, char);
-
+                    if (next_child) |child| {
+                        try self.current_key.append(self.allocator, next_byte);
+                        // This append may reallocate `stack`, so the `top` index
+                        // is recomputed on the next loop iteration rather than
+                        // reused.
                         try self.stack.append(self.allocator, IteratorFrame{
                             .node = child,
-                            .child_iter = child.children.iterator(),
+                            .next_char = 0,
                             .visited_self = false,
                         });
                     } else {
@@ -399,6 +422,71 @@ pub fn TrieMap(comptime V: type) type {
             return Iterator.init(self.allocator, self.root);
         }
     };
+}
+
+fn strCompare(lhs: []const u8, rhs: []const u8) std.math.Order {
+    return std.mem.order(u8, lhs, rhs);
+}
+
+const MapOracle = @import("oracle.zig").MapOracle;
+
+test "TrieMap: differential test against sorted-array oracle" {
+    const allocator = std.testing.allocator;
+
+    // Generated keys are duped into an arena that lives for the whole test, so
+    // the oracle can safely hold the same slices the trie was given.
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const key_arena = arena.allocator();
+
+    var trie = try TrieMap(i32).init(allocator);
+    defer trie.deinit();
+
+    var oracle: MapOracle([]const u8, i32, strCompare) = .{};
+    defer oracle.deinit(allocator);
+
+    var prng = std.Random.DefaultPrng.init(0x7271_e000_0000_0000);
+    const random = prng.random();
+
+    const operations = 3000;
+
+    var op: usize = 0;
+    while (op < operations) : (op += 1) {
+        // Short keys over a 4-letter alphabet force shared prefixes, exact
+        // duplicates, and prefix-is-also-a-key cases, exercising node pruning.
+        var buf: [4]u8 = undefined;
+        const len = random.uintLessThan(usize, buf.len + 1);
+        for (0..len) |i| buf[i] = 'a' + @as(u8, @intCast(random.uintLessThan(u8, 4)));
+        const key = try key_arena.dupe(u8, buf[0..len]);
+        const value: i32 = @intCast(op);
+
+        if (random.uintLessThan(u32, 3) == 0) {
+            const removed = trie.remove(key);
+            const oracle_removed = oracle.remove(key);
+            try std.testing.expectEqual(oracle_removed != null, removed != null);
+            if (oracle_removed) |ov| try std.testing.expectEqual(ov, removed.?);
+        } else {
+            try trie.put(key, value);
+            try oracle.put(allocator, key, value);
+        }
+
+        try std.testing.expectEqual(oracle.count(), trie.count());
+        if (oracle.get(key)) |ov| {
+            try std.testing.expectEqual(ov, trie.get(key).?.*);
+        } else {
+            try std.testing.expect(trie.get(key) == null);
+        }
+
+        var iter = try trie.iterator();
+        defer iter.deinit();
+        var idx: usize = 0;
+        while (try iter.next()) |entry| : (idx += 1) {
+            try std.testing.expect(idx < oracle.entries.items.len);
+            try std.testing.expectEqualStrings(oracle.entries.items[idx].key, entry.key);
+            try std.testing.expectEqual(oracle.entries.items[idx].value, entry.value);
+        }
+        try std.testing.expectEqual(oracle.entries.items.len, idx);
+    }
 }
 
 test "TrieMap: basic operations" {

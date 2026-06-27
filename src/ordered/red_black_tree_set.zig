@@ -249,115 +249,120 @@ pub fn RedBlackTreeSet(
         }
 
         fn removeNode(self: *Self, node: *Node) void {
-            var deleted_node = node;
-            var deleted_color = deleted_node.color;
+            // `replacement` is the node (possibly null) that moves into the
+            // spliced-out position; `replacement_parent` records its parent
+            // explicitly. The parent is needed because, without a NIL sentinel,
+            // a null replacement carries no parent pointer of its own, and
+            // `fixDelete` must still know where in the tree to start rebalancing.
+            var deleted_color = node.color;
             var replacement: ?*Node = null;
+            var replacement_parent: ?*Node = null;
 
             if (node.left == null) {
                 replacement = node.right;
+                replacement_parent = node.parent;
                 self.transplant(node, node.right);
             } else if (node.right == null) {
                 replacement = node.left;
+                replacement_parent = node.parent;
                 self.transplant(node, node.left);
             } else {
-                deleted_node = self.findMinimum(node.right.?);
-                deleted_color = deleted_node.color;
-                replacement = deleted_node.right;
+                const successor = self.findMinimum(node.right.?);
+                deleted_color = successor.color;
+                replacement = successor.right;
 
-                if (deleted_node.parent == node) {
-                    if (replacement) |r| r.parent = deleted_node;
+                if (successor.parent == node) {
+                    // The successor moves into `node`'s slot, so it becomes the
+                    // parent of its own right child (the replacement).
+                    replacement_parent = successor;
                 } else {
-                    self.transplant(deleted_node, deleted_node.right);
-                    deleted_node.right = node.right;
-                    if (deleted_node.right) |right| right.parent = deleted_node;
+                    replacement_parent = successor.parent;
+                    self.transplant(successor, successor.right);
+                    successor.right = node.right;
+                    if (successor.right) |right| right.parent = successor;
                 }
 
-                self.transplant(node, deleted_node);
-                deleted_node.left = node.left;
-                if (deleted_node.left) |left| left.parent = deleted_node;
-                deleted_node.color = node.color;
+                self.transplant(node, successor);
+                successor.left = node.left;
+                if (successor.left) |left| left.parent = successor;
+                successor.color = node.color;
             }
 
-            // Fix red-black properties before freeing the node
+            // Fix red-black properties before freeing the node.
             if (deleted_color == .black) {
-                self.fixDelete(replacement);
+                self.fixDelete(replacement, replacement_parent);
             }
 
             self.allocator.destroy(node);
         }
 
-        fn fixDelete(self: *Self, node: ?*Node) void {
+        fn fixDelete(self: *Self, node: ?*Node, node_parent: ?*Node) void {
             var current = node;
+            // Tracked explicitly so the loop can advance even while `current`
+            // is null (a doubly-black NIL position). In a valid red-black tree
+            // a black, non-root node always has a sibling, so the sibling
+            // lookups below never dereference null.
+            var parent = node_parent;
 
             while (current != self.root and Node.isBlack(current)) {
-                if (current) |curr| {
-                    const parent = curr.parent orelse break;
+                const p = parent.?;
 
-                    if (curr == parent.left) {
-                        var sibling = parent.right;
+                if (current == p.left) {
+                    var sibling = p.right.?;
 
-                        if (Node.isRed(sibling)) {
-                            if (sibling) |s| s.color = .black;
-                            parent.color = .red;
-                            self.rotateLeft(parent);
-                            sibling = parent.right;
-                        }
+                    if (sibling.color == .red) {
+                        sibling.color = .black;
+                        p.color = .red;
+                        self.rotateLeft(p);
+                        sibling = p.right.?;
+                    }
 
-                        if (sibling) |s| {
-                            if (Node.isBlack(s.left) and Node.isBlack(s.right)) {
-                                s.color = .red;
-                                current = parent;
-                            } else {
-                                if (Node.isBlack(s.right)) {
-                                    if (s.left) |left| left.color = .black;
-                                    s.color = .red;
-                                    self.rotateRight(s);
-                                    sibling = parent.right;
-                                }
-
-                                if (sibling) |new_s| {
-                                    new_s.color = parent.color;
-                                    parent.color = .black;
-                                    if (new_s.right) |right| right.color = .black;
-                                    self.rotateLeft(parent);
-                                }
-                                current = self.root;
-                            }
-                        }
+                    if (Node.isBlack(sibling.left) and Node.isBlack(sibling.right)) {
+                        sibling.color = .red;
+                        current = p;
+                        parent = p.parent;
                     } else {
-                        var sibling = parent.left;
-
-                        if (Node.isRed(sibling)) {
-                            if (sibling) |s| s.color = .black;
-                            parent.color = .red;
-                            self.rotateRight(parent);
-                            sibling = parent.left;
+                        if (Node.isBlack(sibling.right)) {
+                            if (sibling.left) |left| left.color = .black;
+                            sibling.color = .red;
+                            self.rotateRight(sibling);
+                            sibling = p.right.?;
                         }
 
-                        if (sibling) |s| {
-                            if (Node.isBlack(s.right) and Node.isBlack(s.left)) {
-                                s.color = .red;
-                                current = parent;
-                            } else {
-                                if (Node.isBlack(s.left)) {
-                                    if (s.right) |right| right.color = .black;
-                                    s.color = .red;
-                                    self.rotateLeft(s);
-                                    sibling = parent.left;
-                                }
-
-                                if (sibling) |new_s| {
-                                    new_s.color = parent.color;
-                                    parent.color = .black;
-                                    if (new_s.left) |left| left.color = .black;
-                                    self.rotateRight(parent);
-                                }
-                                current = self.root;
-                            }
-                        }
+                        sibling.color = p.color;
+                        p.color = .black;
+                        if (sibling.right) |right| right.color = .black;
+                        self.rotateLeft(p);
+                        current = self.root;
                     }
                 } else {
-                    break;
+                    var sibling = p.left.?;
+
+                    if (sibling.color == .red) {
+                        sibling.color = .black;
+                        p.color = .red;
+                        self.rotateRight(p);
+                        sibling = p.left.?;
+                    }
+
+                    if (Node.isBlack(sibling.right) and Node.isBlack(sibling.left)) {
+                        sibling.color = .red;
+                        current = p;
+                        parent = p.parent;
+                    } else {
+                        if (Node.isBlack(sibling.left)) {
+                            if (sibling.right) |right| right.color = .black;
+                            sibling.color = .red;
+                            self.rotateLeft(sibling);
+                            sibling = p.left.?;
+                        }
+
+                        sibling.color = p.color;
+                        p.color = .black;
+                        if (sibling.left) |left| left.color = .black;
+                        self.rotateRight(p);
+                        current = self.root;
+                    }
                 }
             }
 
@@ -546,6 +551,81 @@ pub fn RedBlackTreeSet(
 
 fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
     return std.math.order(lhs, rhs);
+}
+
+const SetOracle = @import("oracle.zig").SetOracle;
+
+test "RedBlackTreeSet: differential test against sorted-array oracle" {
+    const allocator = std.testing.allocator;
+    var tree = RedBlackTreeSet(i32, i32Compare).init(allocator);
+    defer tree.deinit();
+
+    var oracle: SetOracle(i32, i32Compare) = .{};
+    defer oracle.deinit(allocator);
+
+    // Fixed seed keeps the operation sequence deterministic across runs.
+    var prng = std.Random.DefaultPrng.init(0x1234_5678_9abc_def0);
+    const random = prng.random();
+
+    const operations = 3000;
+    // A small key space forces frequent duplicate puts and removals of present
+    // values, exercising the rebalancing paths rather than only growth.
+    const key_space: u32 = 200;
+
+    var op: usize = 0;
+    while (op < operations) : (op += 1) {
+        const value: i32 = @intCast(random.uintLessThan(u32, key_space));
+
+        // Roughly one removal for every two insertions, so the tree grows and
+        // then churns instead of only filling up.
+        if (random.uintLessThan(u32, 3) == 0) {
+            const tree_removed = tree.remove(value);
+            const oracle_removed = oracle.remove(value);
+            try std.testing.expectEqual(oracle_removed, tree_removed != null);
+            if (tree_removed) |v| try std.testing.expectEqual(value, v);
+        } else {
+            try tree.put(value);
+            try oracle.put(allocator, value);
+        }
+
+        // Cheap invariants checked on every operation: the count must agree, the
+        // touched value's membership must agree, and in-order iteration must
+        // reproduce the oracle's sorted order exactly.
+        try std.testing.expectEqual(oracle.count(), tree.count());
+        try std.testing.expectEqual(oracle.contains(value), tree.contains(value));
+        try expectIterationMatches(&tree, &oracle);
+
+        // The full key-space membership sweep is O(key_space) per check, so run
+        // it periodically rather than on every operation to keep the test fast.
+        if (op % 100 == 0) {
+            var k: i32 = 0;
+            while (k < @as(i32, @intCast(key_space))) : (k += 1) {
+                try std.testing.expectEqual(oracle.contains(k), tree.contains(k));
+            }
+        }
+    }
+
+    // Final full sweep after the last operation.
+    var k: i32 = 0;
+    while (k < @as(i32, @intCast(key_space))) : (k += 1) {
+        try std.testing.expectEqual(oracle.contains(k), tree.contains(k));
+    }
+}
+
+/// Asserts that a tree's in-order iteration reproduces the oracle's sorted
+/// values exactly, in the same order and with the same length.
+fn expectIterationMatches(
+    tree: *const RedBlackTreeSet(i32, i32Compare),
+    oracle: *const SetOracle(i32, i32Compare),
+) !void {
+    var iter = try tree.iterator();
+    defer iter.deinit();
+    var idx: usize = 0;
+    while (try iter.next()) |item| : (idx += 1) {
+        try std.testing.expect(idx < oracle.items.items.len);
+        try std.testing.expectEqual(oracle.items.items[idx], item);
+    }
+    try std.testing.expectEqual(oracle.items.items.len, idx);
 }
 
 test "RedBlackTreeSet: basic operations" {

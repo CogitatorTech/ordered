@@ -110,6 +110,60 @@ fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
     return std.math.order(lhs, rhs);
 }
 
+const SetOracle = @import("oracle.zig").SetOracle;
+
+test "SortedSet: differential test against sorted-array oracle" {
+    const allocator = std.testing.allocator;
+    var set = SortedSet(i32, i32Compare).init(allocator);
+    defer set.deinit();
+
+    var oracle: SetOracle(i32, i32Compare) = .{};
+    defer oracle.deinit(allocator);
+
+    // Fixed seed keeps the operation sequence deterministic across runs.
+    var prng = std.Random.DefaultPrng.init(0x0bad_c0ffee_1234);
+    const random = prng.random();
+
+    const operations = 3000;
+    const key_space: u32 = 200;
+
+    var op: usize = 0;
+    while (op < operations) : (op += 1) {
+        const value: i32 = @intCast(random.uintLessThan(u32, key_space));
+
+        if (random.uintLessThan(u32, 3) == 0) {
+            const set_removed = set.removeValue(value);
+            const oracle_removed = oracle.remove(value);
+            try std.testing.expectEqual(oracle_removed, set_removed != null);
+            if (set_removed) |v| try std.testing.expectEqual(value, v);
+        } else {
+            const set_added = try set.put(value);
+            const was_present = oracle.contains(value);
+            try oracle.put(allocator, value);
+            // `put` reports whether the value was newly added.
+            try std.testing.expectEqual(!was_present, set_added);
+        }
+
+        try std.testing.expectEqual(oracle.count(), set.count());
+        try std.testing.expectEqual(oracle.contains(value), set.contains(value));
+
+        var iter = set.iterator();
+        var idx: usize = 0;
+        while (iter.next()) |item| : (idx += 1) {
+            try std.testing.expect(idx < oracle.items.items.len);
+            try std.testing.expectEqual(oracle.items.items[idx], item);
+        }
+        try std.testing.expectEqual(oracle.items.items.len, idx);
+
+        if (op % 100 == 0) {
+            var k: i32 = 0;
+            while (k < @as(i32, @intCast(key_space))) : (k += 1) {
+                try std.testing.expectEqual(oracle.contains(k), set.contains(k));
+            }
+        }
+    }
+}
+
 test "SortedSet basic functionality" {
     const allocator = std.testing.allocator;
     var set = SortedSet(i32, i32Compare).init(allocator);
