@@ -6,13 +6,11 @@ on:
     tags:
       - 'v*'
 
-# Permissions required for the GitHub Actions Pages deployment.
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow one concurrent deployment, without cancelling an in-progress run.
 concurrency:
   group: pages
   cancel-in-progress: false
