@@ -735,3 +735,32 @@ test "CartesianTreeMap: same priorities different keys" {
     try testing.expect(tree.contains(10));
     try testing.expect(tree.contains(15));
 }
+
+test "regression: CartesianTreeMap update with higher priority does not duplicate the key" {
+    // Bug found by the differential oracle: updating an existing key whose new
+    // priority exceeded an ancestor's caused `insertNode` to split and insert a
+    // second node with the same key. Key 5 sits below the higher-priority key
+    // 10; re-inserting 5 with a priority above 10 must update in place.
+    var tree = TreapI32.init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(10, 100, 50);
+    try tree.putWithPriority(5, 5, 10); // becomes 10's left child
+    try testing.expectEqual(@as(usize, 2), tree.count());
+
+    try tree.putWithPriority(5, 55, 100); // new priority exceeds the ancestor
+    try testing.expectEqual(@as(usize, 2), tree.count());
+    try testing.expectEqual(@as(i32, 55), tree.get(5).?);
+
+    // Exactly one node with key 5 remains, and the tree is still a valid treap.
+    var iter = try tree.iterator(testing.allocator);
+    defer iter.deinit();
+    var fives: usize = 0;
+    var n: usize = 0;
+    while (try iter.next()) |entry| : (n += 1) {
+        if (entry.key == 5) fives += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), fives);
+    try testing.expectEqual(@as(usize, 2), n);
+    try expectTreapInvariants(tree.root);
+}

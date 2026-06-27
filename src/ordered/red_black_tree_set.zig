@@ -824,3 +824,57 @@ test "RedBlackTreeSet: get returns correct value" {
 
     try std.testing.expect(tree.get(99) == null);
 }
+
+const RbTreeI32 = RedBlackTreeSet(i32, i32Compare);
+
+/// Returns the black height of a subtree while asserting the structural
+/// red-black invariants: no red node has a red child, and every root-to-leaf
+/// path through the subtree passes through the same number of black nodes. A
+/// missing rebalance on deletion shows up here as unequal child black heights.
+fn rbBlackHeight(node: ?*const RbTreeI32.Node) !usize {
+    const n = node orelse return 1; // NIL nodes are black.
+    if (n.color == .red) {
+        if (n.left) |l| try std.testing.expect(l.color == .black);
+        if (n.right) |r| try std.testing.expect(r.color == .black);
+    }
+    const left_height = try rbBlackHeight(n.left);
+    const right_height = try rbBlackHeight(n.right);
+    try std.testing.expectEqual(left_height, right_height);
+    return left_height + @as(usize, if (n.color == .black) 1 else 0);
+}
+
+fn expectRbInvariants(tree: *const RbTreeI32) !void {
+    if (tree.root) |r| try std.testing.expect(r.color == .black); // The root is black.
+    _ = try rbBlackHeight(tree.root);
+}
+
+test "regression: RedBlackTreeSet deletion preserves red-black invariants" {
+    // Bug found by the differential oracle: deleting a black node passed a null
+    // replacement to `fixDelete`, which (with no NIL sentinel) could not find its
+    // parent and skipped rebalancing. The tree stayed a valid BST, so ordering
+    // and count looked fine, but its black heights drifted out of balance and a
+    // later deletion drove `fixDelete` into an infinite loop. Checking the
+    // red-black invariants after each deletion catches the missing rebalance
+    // directly, at the first offending black-node removal.
+    const allocator = std.testing.allocator;
+    var tree = RbTreeI32.init(allocator);
+    defer tree.deinit();
+
+    const n: i32 = 64;
+    // Insert and delete in fixed permutations (multipliers coprime to 64), so the
+    // schedule is fully deterministic and reproducible.
+    var i: i32 = 0;
+    while (i < n) : (i += 1) try tree.put(@mod(i * 37, n));
+    try std.testing.expectEqual(@as(usize, @intCast(n)), tree.count());
+    try expectRbInvariants(&tree);
+
+    i = 0;
+    while (i < n) : (i += 1) {
+        const key = @mod(i * 29, n);
+        try std.testing.expect(tree.remove(key) != null);
+        try std.testing.expect(!tree.contains(key));
+        try std.testing.expectEqual(@as(usize, @intCast(n - 1 - i)), tree.count());
+        try expectRbInvariants(&tree);
+    }
+    try std.testing.expectEqual(@as(usize, 0), tree.count());
+}

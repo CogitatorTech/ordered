@@ -936,3 +936,34 @@ test "regression: BTreeMap sequential delete with odd B stays valid" {
         try std.testing.expectEqual(@as(i32, i * 2), map.get(i).?.*);
     }
 }
+
+test "regression: BTreeMap put of a split median does not duplicate the key" {
+    // Bug found by the differential oracle: inserting a key equal to the median
+    // promoted during a child split descended into the left half and inserted a
+    // second copy, inflating the count and corrupting search. With B=4 the keys
+    // 1..7 build a tree whose right leaf is the full node [5, 6, 7], whose median
+    // is 6. Re-inserting 6 must update in place rather than add a duplicate.
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    var k: i32 = 1;
+    while (k <= 7) : (k += 1) try map.put(k, k);
+    try std.testing.expectEqual(@as(usize, 7), map.count());
+
+    try map.put(6, 600);
+    try std.testing.expectEqual(@as(usize, 7), map.count());
+    try std.testing.expectEqual(@as(i32, 600), map.get(6).?.*);
+
+    // Iteration must be strictly increasing (a duplicated 6 would break this)
+    // and visit exactly seven keys.
+    var iter = try map.iterator();
+    defer iter.deinit();
+    var prev: ?i32 = null;
+    var n: usize = 0;
+    while (try iter.next()) |entry| : (n += 1) {
+        if (prev) |p| try std.testing.expect(entry.key > p);
+        prev = entry.key;
+    }
+    try std.testing.expectEqual(@as(usize, 7), n);
+}
