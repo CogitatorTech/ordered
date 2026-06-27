@@ -169,10 +169,6 @@ pub fn main() !void {
 
 You can find the API documentation for the latest release of Ordered [here](https://CogitatorTech.github.io/ordered/).
 
-Alternatively, you can use the `make docs` command to generate the documentation for the current version of Ordered.
-This will generate HTML documentation in the `docs/api` directory, which you can serve locally with `make serve-docs`
-and view in a web browser.
-
 ### Examples
 
 Check out the [examples](examples) directory for example usages of Ordered.
