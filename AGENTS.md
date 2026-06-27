@@ -26,20 +26,24 @@ Priorities, in order:
 
 - Use Oxford commas in inline lists: "a, b, and c" not "a, b, c".
 - Do not use em dashes. Restructure the sentence, or use a colon or semicolon instead.
-- Avoid colorful adjectives and adverbs. Write "TCP proxy" not "lightweight TCP proxy", "scoring components" not "transparent scoring components".
-- Use noun phrases for checklist items, not imperative verbs. Write "redundant index detection" not "detect redundant indexes".
-- Headings in Markdown files must be in the title case: "Build from Source" not "Build from source". Minor words (a, an, the, and, but, or, for, in,
-  on, at, to, by, of, is, are, was, were, be) stay lowercase unless they are the first word.
+- Avoid colorful adjectives and adverbs. Write "adjacency query" not "blazing adjacency query".
+- Prefer noun phrases for checklist items over imperative verbs. Write "temp directory teardown" not "tear down the temp directory".
+- Headings in Markdown files must be in title case: "Build from Source" not "Build from source". Minor words (a, an, the, and, but, or, for, in, on,
+  at, to, by, of) stay lowercase unless they are the first word.
+- Write correct and complete sentences.
+- Avoid made-up words, abbreviations, and colons in the middle of sentences.
 
 ## Repository Layout
 
 - `src/lib.zig`: Public API entry point. Re-exports `SortedSet`, `RedBlackTreeSet`, `BTreeMap`, `SkipListMap`, `TrieMap`, and `CartesianTreeMap`.
 - `src/ordered/sorted_set.zig`: `SortedSet` (insertion-sorted `std.ArrayList` backed by a linear scan for insert and removal).
-- `src/ordered/red_black_tree_set.zig`: `RedBlackTreeSet` (self-balancing BST; takes an explicit three-way comparison function, consistent with the other generic-key containers).
+- `src/ordered/red_black_tree_set.zig`: `RedBlackTreeSet` (self-balancing BST; takes an explicit three-way comparison function, consistent with the
+  other generic-key containers).
 - `src/ordered/btree_map.zig`: `BTreeMap` (cache-friendly B-tree with configurable branching factor).
 - `src/ordered/skip_list_map.zig`: `SkipListMap` (probabilistic skip list with a per-instance PRNG).
 - `src/ordered/trie_map.zig`: `TrieMap` (prefix tree, specialised for `[]const u8` keys).
-- `src/ordered/cartesian_tree_map.zig`: `CartesianTreeMap` (treap combining BST ordering with max-heap priorities; takes an explicit key-comparison function).
+- `src/ordered/cartesian_tree_map.zig`: `CartesianTreeMap` (treap combining BST ordering with max-heap priorities; takes an explicit key-comparison
+  function).
 - `examples/`: Self-contained example programs (`e1_btree_map.zig` through `e6_cartesian_tree_map.zig`) built as executables via `build.zig`.
 - `benches/`: Benchmark programs (`b1_btree_map.zig` through `b6_cartesian_tree_map.zig`) built in `ReleaseFast`.
 - `benches/util/timer.zig`: Internal compatibility shim for the removed `std.time.Timer`, backed by `std.Io.Timestamp`.

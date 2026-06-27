@@ -110,15 +110,21 @@ pub fn CartesianTreeMap(
         /// Inserts a key-value pair with a random priority.
         ///
         /// Uses per-instance PRNG priorities to ensure expected O(log n) performance.
-        /// If the key already exists, updates its value and priority.
+        /// If the key already exists, updates its value in place; the node keeps
+        /// its current priority, so the tree shape (and balance) is unchanged.
         ///
         /// Time complexity: O(log n) expected
         ///
         /// ## Errors
         /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, key: K, value: V) !void {
-            const priority = self.prng.random().int(u32);
-            try self.putWithPriority(key, value, priority);
+            // A value-only update keeps the existing priority: re-randomising it
+            // on every update would churn the tree structure for no benefit.
+            if (self.findNode(key)) |existing| {
+                existing.value = value;
+                return;
+            }
+            try self.insertNew(key, value, self.prng.random().int(u32));
         }
 
         /// Inserts a key-value pair with an explicit priority.
@@ -134,6 +140,20 @@ pub fn CartesianTreeMap(
         /// ## Errors
         /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn putWithPriority(self: *Self, key: K, value: V, priority: u32) !void {
+            // To honor the explicit priority on an update, remove the existing
+            // node and reinsert it. Reinsertion positions the node by its new
+            // priority and preserves the max-heap invariant, whereas writing the
+            // priority in place would leave a node out of heap order relative to
+            // its parent or children.
+            if (self.contains(key)) {
+                _ = self.remove(key);
+            }
+            try self.insertNew(key, value, priority);
+        }
+
+        /// Inserts a key known not to be present. Callers must ensure the key is
+        /// absent so the insertion never produces a duplicate.
+        fn insertNew(self: *Self, key: K, value: V, priority: u32) !void {
             const new_node = try self.allocator.create(Node);
             new_node.* = Node.init(key, value, priority);
 
@@ -144,6 +164,18 @@ pub fn CartesianTreeMap(
             }
 
             self.root = self.insertNode(self.root, new_node);
+        }
+
+        fn findNode(self: *Self, key: K) ?*Node {
+            var current = self.root;
+            while (current) |node| {
+                switch (compare(key, node.key)) {
+                    .eq => return node,
+                    .lt => current = node.left,
+                    .gt => current = node.right,
+                }
+            }
+            return null;
         }
 
         fn insertNode(self: *Self, root: ?*Node, new_node: *Node) ?*Node {
@@ -378,6 +410,127 @@ fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
     return std.math.order(lhs, rhs);
 }
 
+const MapOracle = @import("oracle.zig").MapOracle;
+
+const TreapI32 = CartesianTreeMap(i32, i32, i32Compare);
+
+/// Recursively asserts the two invariants every treap node must satisfy: BST
+/// ordering on keys and the max-heap property on priorities (a parent's
+/// priority is greater than or equal to each child's).
+fn expectTreapInvariants(node: ?*const TreapI32.Node) !void {
+    const n = node orelse return;
+    if (n.left) |l| {
+        try testing.expect(i32Compare(l.key, n.key) == .lt);
+        try testing.expect(l.priority <= n.priority);
+        try expectTreapInvariants(l);
+    }
+    if (n.right) |r| {
+        try testing.expect(i32Compare(r.key, n.key) == .gt);
+        try testing.expect(r.priority <= n.priority);
+        try expectTreapInvariants(r);
+    }
+}
+
+test "CartesianTreeMap: differential test against sorted-array oracle" {
+    const allocator = testing.allocator;
+    var tree = TreapI32.init(allocator);
+    defer tree.deinit();
+
+    var oracle: MapOracle(i32, i32, i32Compare) = .{};
+    defer oracle.deinit(allocator);
+
+    // The treap seeds its own PRNG internally for priorities; this separate
+    // PRNG only drives the operation sequence and is fixed-seed for determinism.
+    var prng = std.Random.DefaultPrng.init(0xca27_e51a_7700_0000);
+    const random = prng.random();
+
+    const operations = 3000;
+    const key_space: u32 = 200;
+
+    var op: usize = 0;
+    while (op < operations) : (op += 1) {
+        const key: i32 = @intCast(random.uintLessThan(u32, key_space));
+        const value: i32 = @intCast(op);
+
+        if (random.uintLessThan(u32, 3) == 0) {
+            const removed = tree.remove(key);
+            const oracle_removed = oracle.remove(key);
+            try testing.expectEqual(oracle_removed != null, removed != null);
+            if (oracle_removed) |ov| try testing.expectEqual(ov, removed.?);
+        } else {
+            try tree.put(key, value);
+            try oracle.put(allocator, key, value);
+        }
+
+        try testing.expectEqual(oracle.count(), tree.count());
+        if (oracle.get(key)) |ov| {
+            try testing.expectEqual(ov, tree.get(key).?);
+        } else {
+            try testing.expect(tree.get(key) == null);
+        }
+
+        var iter = try tree.iterator(allocator);
+        defer iter.deinit();
+        var idx: usize = 0;
+        while (try iter.next()) |entry| : (idx += 1) {
+            try testing.expect(idx < oracle.entries.items.len);
+            try testing.expectEqual(oracle.entries.items[idx].key, entry.key);
+            try testing.expectEqual(oracle.entries.items[idx].value, entry.value);
+        }
+        try testing.expectEqual(oracle.entries.items.len, idx);
+
+        if (op % 100 == 0) {
+            var k: i32 = 0;
+            while (k < @as(i32, @intCast(key_space))) : (k += 1) {
+                try testing.expectEqual(oracle.contains(k), tree.contains(k));
+            }
+            // Every put, remove, and value-update must leave the treap a valid
+            // max-heap on priorities and a valid BST on keys.
+            try expectTreapInvariants(tree.root);
+        }
+    }
+}
+
+test "CartesianTreeMap: putWithPriority update preserves heap invariant" {
+    var tree = TreapI32.init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(5, 50, 10);
+    try tree.putWithPriority(3, 30, 20);
+    try tree.putWithPriority(8, 80, 5);
+    try tree.putWithPriority(1, 10, 15);
+    try tree.putWithPriority(7, 70, 25);
+    try expectTreapInvariants(tree.root);
+
+    // Raising key 5's priority above all others must lift it to the root while
+    // keeping the structure a valid treap.
+    try tree.putWithPriority(5, 55, 100);
+    try testing.expectEqual(@as(usize, 5), tree.count());
+    try testing.expectEqual(@as(i32, 55), tree.get(5).?);
+    try testing.expectEqual(@as(i32, 5), tree.root.?.key);
+    try testing.expectEqual(@as(u32, 100), tree.root.?.priority);
+    try expectTreapInvariants(tree.root);
+
+    // Lowering it again must re-sink it without breaking the invariants, and the
+    // value update must persist.
+    try tree.putWithPriority(5, 555, 1);
+    try testing.expectEqual(@as(usize, 5), tree.count());
+    try testing.expectEqual(@as(i32, 555), tree.get(5).?);
+    try expectTreapInvariants(tree.root);
+}
+
+test "CartesianTreeMap: put updates value without changing priority" {
+    var tree = TreapI32.init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(10, 100, 42);
+    // A value-only `put` must leave the node's priority untouched.
+    try tree.put(10, 200);
+    try testing.expectEqual(@as(usize, 1), tree.count());
+    try testing.expectEqual(@as(i32, 200), tree.get(10).?);
+    try testing.expectEqual(@as(u32, 42), tree.root.?.priority);
+}
+
 test "CartesianTreeMap basic operations" {
     var tree = CartesianTreeMap(i32, []const u8, i32Compare).init(testing.allocator);
     defer tree.deinit();
@@ -581,4 +734,33 @@ test "CartesianTreeMap: same priorities different keys" {
     try testing.expect(tree.contains(5));
     try testing.expect(tree.contains(10));
     try testing.expect(tree.contains(15));
+}
+
+test "regression: CartesianTreeMap update with higher priority does not duplicate the key" {
+    // Bug found by the differential oracle: updating an existing key whose new
+    // priority exceeded an ancestor's caused `insertNode` to split and insert a
+    // second node with the same key. Key 5 sits below the higher-priority key
+    // 10; re-inserting 5 with a priority above 10 must update in place.
+    var tree = TreapI32.init(testing.allocator);
+    defer tree.deinit();
+
+    try tree.putWithPriority(10, 100, 50);
+    try tree.putWithPriority(5, 5, 10); // becomes 10's left child
+    try testing.expectEqual(@as(usize, 2), tree.count());
+
+    try tree.putWithPriority(5, 55, 100); // new priority exceeds the ancestor
+    try testing.expectEqual(@as(usize, 2), tree.count());
+    try testing.expectEqual(@as(i32, 55), tree.get(5).?);
+
+    // Exactly one node with key 5 remains, and the tree is still a valid treap.
+    var iter = try tree.iterator(testing.allocator);
+    defer iter.deinit();
+    var fives: usize = 0;
+    var n: usize = 0;
+    while (try iter.next()) |entry| : (n += 1) {
+        if (entry.key == 5) fives += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), fives);
+    try testing.expectEqual(@as(usize, 2), n);
+    try expectTreapInvariants(tree.root);
 }

@@ -300,6 +300,65 @@ fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
     return std.math.order(lhs, rhs);
 }
 
+const MapOracle = @import("oracle.zig").MapOracle;
+
+test "SkipListMap: differential test against sorted-array oracle" {
+    const allocator = std.testing.allocator;
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
+    defer list.deinit();
+
+    var oracle: MapOracle(i32, i32, i32Compare) = .{};
+    defer oracle.deinit(allocator);
+
+    // The skip list seeds its own PRNG internally for level selection; this
+    // separate PRNG only drives the operation sequence and is fixed-seed so
+    // the sequence of keys and operations is deterministic.
+    var prng = std.Random.DefaultPrng.init(0x5151_5151_5151_5151);
+    const random = prng.random();
+
+    const operations = 3000;
+    const key_space: u32 = 200;
+
+    var op: usize = 0;
+    while (op < operations) : (op += 1) {
+        const key: i32 = @intCast(random.uintLessThan(u32, key_space));
+        const value: i32 = @intCast(op);
+
+        if (random.uintLessThan(u32, 3) == 0) {
+            const removed = list.remove(key);
+            const oracle_removed = oracle.remove(key);
+            try std.testing.expectEqual(oracle_removed != null, removed != null);
+            if (oracle_removed) |ov| try std.testing.expectEqual(ov, removed.?);
+        } else {
+            try list.put(key, value);
+            try oracle.put(allocator, key, value);
+        }
+
+        try std.testing.expectEqual(oracle.count(), list.count());
+        if (oracle.get(key)) |ov| {
+            try std.testing.expectEqual(ov, list.get(key).?.*);
+        } else {
+            try std.testing.expect(list.get(key) == null);
+        }
+
+        var iter = list.iterator();
+        var idx: usize = 0;
+        while (iter.next()) |entry| : (idx += 1) {
+            try std.testing.expect(idx < oracle.entries.items.len);
+            try std.testing.expectEqual(oracle.entries.items[idx].key, entry.key);
+            try std.testing.expectEqual(oracle.entries.items[idx].value, entry.value);
+        }
+        try std.testing.expectEqual(oracle.entries.items.len, idx);
+
+        if (op % 100 == 0) {
+            var k: i32 = 0;
+            while (k < @as(i32, @intCast(key_space))) : (k += 1) {
+                try std.testing.expectEqual(oracle.contains(k), list.contains(k));
+            }
+        }
+    }
+}
+
 test "SkipListMap: basic operations" {
     const allocator = std.testing.allocator;
     var list = try SkipListMap(i32, []const u8, i32Compare, 16).init(allocator);

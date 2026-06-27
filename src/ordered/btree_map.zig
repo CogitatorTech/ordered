@@ -313,8 +313,17 @@ pub fn BTreeMap(
                 while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {}
                 if (node.children[i].?.len == BRANCHING_FACTOR - 1) {
                     try self.splitChild(node, i);
-                    if (compare(node.keys[i], key) == .lt) {
-                        i += 1;
+                    // The split promotes a median key into this node at index `i`.
+                    // If it equals `key`, the key now lives here: update in
+                    // place instead of descending, which would otherwise insert
+                    // a duplicate into the left half.
+                    switch (compare(key, node.keys[i])) {
+                        .eq => {
+                            node.values[i] = value;
+                            return false;
+                        },
+                        .gt => i += 1,
+                        .lt => {},
                     }
                 }
                 return try self.insertNonFull(node.children[i].?, key, value);
@@ -637,6 +646,74 @@ fn i32Compare(lhs: i32, rhs: i32) std.math.Order {
     return std.math.order(lhs, rhs);
 }
 
+const MapOracle = @import("oracle.zig").MapOracle;
+
+fn btreeDifferential(comptime B: u16) !void {
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, B).init(allocator);
+    defer map.deinit();
+
+    var oracle: MapOracle(i32, i32, i32Compare) = .{};
+    defer oracle.deinit(allocator);
+
+    // Fixed, per-branching-factor seed keeps the sequence deterministic.
+    var prng = std.Random.DefaultPrng.init(0x1111_2222_3333_0000 + @as(u64, B));
+    const random = prng.random();
+
+    const operations = 3000;
+    const key_space: u32 = 200;
+
+    var op: usize = 0;
+    while (op < operations) : (op += 1) {
+        const key: i32 = @intCast(random.uintLessThan(u32, key_space));
+        // A monotonically increasing value lets us detect a stale value left
+        // behind by a buggy update or remove.
+        const value: i32 = @intCast(op);
+
+        if (random.uintLessThan(u32, 3) == 0) {
+            const removed = map.remove(key);
+            const oracle_removed = oracle.remove(key);
+            try std.testing.expectEqual(oracle_removed != null, removed != null);
+            if (oracle_removed) |ov| try std.testing.expectEqual(ov, removed.?);
+        } else {
+            try map.put(key, value);
+            try oracle.put(allocator, key, value);
+        }
+
+        try std.testing.expectEqual(oracle.count(), map.count());
+        if (oracle.get(key)) |ov| {
+            try std.testing.expectEqual(ov, map.get(key).?.*);
+        } else {
+            try std.testing.expect(map.get(key) == null);
+        }
+
+        var iter = try map.iterator();
+        defer iter.deinit();
+        var idx: usize = 0;
+        while (try iter.next()) |entry| : (idx += 1) {
+            try std.testing.expect(idx < oracle.entries.items.len);
+            try std.testing.expectEqual(oracle.entries.items[idx].key, entry.key);
+            try std.testing.expectEqual(oracle.entries.items[idx].value, entry.value);
+        }
+        try std.testing.expectEqual(oracle.entries.items.len, idx);
+
+        if (op % 100 == 0) {
+            var k: i32 = 0;
+            while (k < @as(i32, @intCast(key_space))) : (k += 1) {
+                try std.testing.expectEqual(oracle.contains(k), map.contains(k));
+            }
+        }
+    }
+}
+
+test "BTreeMap: differential test against sorted-array oracle" {
+    // Cover even and odd branching factors; odd B has historically exercised
+    // distinct merge and split paths.
+    inline for ([_]u16{ 4, 5, 6, 7 }) |B| {
+        try btreeDifferential(B);
+    }
+}
+
 test "BTreeMap: put, get, and delete" {
     const allocator = std.testing.allocator;
     const B = 4;
@@ -858,4 +935,35 @@ test "regression: BTreeMap sequential delete with odd B stays valid" {
     while (i < 200) : (i += 2) {
         try std.testing.expectEqual(@as(i32, i * 2), map.get(i).?.*);
     }
+}
+
+test "regression: BTreeMap put of a split median does not duplicate the key" {
+    // Bug found by the differential oracle: inserting a key equal to the median
+    // promoted during a child split descended into the left half and inserted a
+    // second copy, inflating the count and corrupting search. With B=4 the keys
+    // 1..7 build a tree whose right leaf is the full node [5, 6, 7], whose median
+    // is 6. Re-inserting 6 must update in place rather than add a duplicate.
+    const allocator = std.testing.allocator;
+    var map = BTreeMap(i32, i32, i32Compare, 4).init(allocator);
+    defer map.deinit();
+
+    var k: i32 = 1;
+    while (k <= 7) : (k += 1) try map.put(k, k);
+    try std.testing.expectEqual(@as(usize, 7), map.count());
+
+    try map.put(6, 600);
+    try std.testing.expectEqual(@as(usize, 7), map.count());
+    try std.testing.expectEqual(@as(i32, 600), map.get(6).?.*);
+
+    // Iteration must be strictly increasing (a duplicated 6 would break this)
+    // and visit exactly seven keys.
+    var iter = try map.iterator();
+    defer iter.deinit();
+    var prev: ?i32 = null;
+    var n: usize = 0;
+    while (try iter.next()) |entry| : (n += 1) {
+        if (prev) |p| try std.testing.expect(entry.key > p);
+        prev = entry.key;
+    }
+    try std.testing.expectEqual(@as(usize, 7), n);
 }
