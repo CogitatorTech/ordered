@@ -37,11 +37,13 @@ Priorities, in order:
 
 - `src/lib.zig`: Public API entry point. Re-exports `SortedSet`, `RedBlackTreeSet`, `BTreeMap`, `SkipListMap`, `TrieMap`, and `CartesianTreeMap`.
 - `src/ordered/sorted_set.zig`: `SortedSet` (insertion-sorted `std.ArrayList` backed by a linear scan for insert and removal).
-- `src/ordered/red_black_tree_set.zig`: `RedBlackTreeSet` (self-balancing BST; takes an explicit three-way comparison function, consistent with the other generic-key containers).
+- `src/ordered/red_black_tree_set.zig`: `RedBlackTreeSet` (self-balancing BST; takes an explicit three-way comparison function, consistent with the
+  other generic-key containers).
 - `src/ordered/btree_map.zig`: `BTreeMap` (cache-friendly B-tree with configurable branching factor).
 - `src/ordered/skip_list_map.zig`: `SkipListMap` (probabilistic skip list with a per-instance PRNG).
 - `src/ordered/trie_map.zig`: `TrieMap` (prefix tree, specialised for `[]const u8` keys).
-- `src/ordered/cartesian_tree_map.zig`: `CartesianTreeMap` (treap combining BST ordering with max-heap priorities; takes an explicit key-comparison function).
+- `src/ordered/cartesian_tree_map.zig`: `CartesianTreeMap` (treap combining BST ordering with max-heap priorities; takes an explicit key-comparison
+  function).
 - `examples/`: Self-contained example programs (`e1_btree_map.zig` through `e6_cartesian_tree_map.zig`) built as executables via `build.zig`.
 - `benches/`: Benchmark programs (`b1_btree_map.zig` through `b6_cartesian_tree_map.zig`) built in `ReleaseFast`.
 - `benches/util/timer.zig`: Internal compatibility shim for the removed `std.time.Timer`, backed by `std.Io.Timestamp`.
