@@ -88,7 +88,7 @@ Please do not add dependencies without prior discussion.
 
 ## Zig Conventions
 
-- Zig version: 0.16.0 (as declared in `build.zig.zon` and the Makefile's `ZIG_LOCAL` path).
+- Zig version: 0.17.0 (as declared in `build.zig.zon` and the Makefile's `ZIG_LOCAL` path).
 - Formatting is enforced by `zig fmt`. Run `make format` before committing.
 - Naming follows Zig standard-library conventions: `camelCase` for functions (e.g. `getPtr`, `keysWithPrefix`), `snake_case` for local variables and
   struct fields, `PascalCase` for types and structs, and `SCREAMING_SNAKE_CASE` for top-level compile-time constants.
