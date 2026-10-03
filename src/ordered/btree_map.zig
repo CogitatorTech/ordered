@@ -123,7 +123,7 @@ pub fn BTreeMap(
             new_node.* = Node{
                 .keys = undefined,
                 .values = undefined,
-                .children = [_]?*Node{null} ** BRANCHING_FACTOR,
+                .children = @splat(null),
                 .len = 0,
                 .is_leaf = true,
             };

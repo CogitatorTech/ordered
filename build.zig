@@ -19,22 +19,12 @@ pub fn build(b: *std.Build) void {
 
     // --- Docs Setup ---
     const docs_step = b.step("docs", "Generate API documentation");
-    const doc_install_path = "docs/api";
-
-    // Zig's `-femit-docs=<path>` writes the leaf dir but does not create
-    // intermediate parents, and git does not track empty directories, so a
-    // fresh checkout may have no `docs/` at all. Create it portably here
-    // (idempotent: createDirPath is a no-op when the directory already exists).
-    const ensure_docs_dir = EnsureDirStep.create(b, "docs");
-    const gen_docs_cmd = b.addSystemCommand(&[_][]const u8{
-        b.graph.zig_exe,
-        "build-lib",
-        "src/lib.zig",
-        "-femit-docs=" ++ doc_install_path,
-        "-fno-emit-bin",
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = lib.getEmittedDocs(),
+        .install_dir = .{ .custom = b.root.joinString(b.allocator, "docs/api") catch @panic("OOM") },
+        .install_subdir = "",
     });
-    gen_docs_cmd.step.dependOn(&ensure_docs_dir.step);
-    docs_step.dependOn(&gen_docs_cmd.step);
+    docs_step.dependOn(&install_docs.step);
 
     // --- Tests ---
     const lib_unit_tests = b.addTest(.{
@@ -46,7 +36,8 @@ pub fn build(b: *std.Build) void {
 
     // --- Examples ---
     const examples_path = "examples";
-    if (b.build_root.handle.openDir(io, examples_path, .{ .iterate = true })) |examples_dir| {
+    b.dependOnDirectoryContents(b.path(examples_path));
+    if (b.root.openDir(io, examples_path, .{ .iterate = true })) |examples_dir| {
         var dir = examples_dir;
         defer dir.close(io);
         const run_all_examples = b.step("run-all", "Run all examples");
@@ -82,7 +73,8 @@ pub fn build(b: *std.Build) void {
 
     // --- Benchmarks ---
     const benches_path = "benches";
-    if (b.build_root.handle.openDir(io, benches_path, .{ .iterate = true })) |benches_dir| {
+    b.dependOnDirectoryContents(b.path(benches_path));
+    if (b.root.openDir(io, benches_path, .{ .iterate = true })) |benches_dir| {
         var dir = benches_dir;
         defer dir.close(io);
         const bench_all = b.step("bench-all", "Run all benchmarks");
@@ -115,32 +107,3 @@ pub fn build(b: *std.Build) void {
         else => @panic(@errorName(err)),
     }
 }
-
-/// Build step that ensures a directory (relative to the build root) exists.
-/// Runs `std.fs.Dir.createDirPath` at make-time, so it only fires when a
-/// step that depends on it is actually being built. Portable across Linux,
-/// macOS, and Windows.
-const EnsureDirStep = struct {
-    step: std.Build.Step,
-    sub_path: []const u8,
-
-    fn create(b: *std.Build, sub_path: []const u8) *EnsureDirStep {
-        const self = b.allocator.create(EnsureDirStep) catch @panic("OOM");
-        self.* = .{
-            .step = std.Build.Step.init(.{
-                .id = .custom,
-                .name = b.fmt("ensure {s}/", .{sub_path}),
-                .owner = b,
-                .makeFn = make,
-            }),
-            .sub_path = sub_path,
-        };
-        return self;
-    }
-
-    fn make(step: *std.Build.Step, options: std.Build.Step.MakeOptions) anyerror!void {
-        _ = options;
-        const self: *EnsureDirStep = @fieldParentPtr("step", step);
-        try step.owner.build_root.handle.createDirPath(step.owner.graph.io, self.sub_path);
-    }
-};
