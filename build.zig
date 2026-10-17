@@ -36,8 +36,8 @@ pub fn build(b: *std.Build) void {
 
     // --- Examples ---
     const examples_path = "examples";
-    b.dependOnDirectoryContents(b.path(examples_path));
     if (b.root.openDir(io, examples_path, .{ .iterate = true })) |examples_dir| {
+        b.dependOnDirectoryContents(b.path(examples_path));
         var dir = examples_dir;
         defer dir.close(io);
         const run_all_examples = b.step("run-all", "Run all examples");
@@ -73,8 +73,8 @@ pub fn build(b: *std.Build) void {
 
     // --- Benchmarks ---
     const benches_path = "benches";
-    b.dependOnDirectoryContents(b.path(benches_path));
     if (b.root.openDir(io, benches_path, .{ .iterate = true })) |benches_dir| {
+        b.dependOnDirectoryContents(b.path(benches_path));
         var dir = benches_dir;
         defer dir.close(io);
         const bench_all = b.step("bench-all", "Run all benchmarks");
