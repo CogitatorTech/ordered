@@ -23,6 +23,7 @@ EXAMPLE       ?= all
 # Automatically find all benchmark names
 BENCHMARKS    := $(patsubst %.zig,%,$(notdir $(wildcard benches/*.zig)))
 BENCHMARK ?= all
+BENCH_ARGS ?=
 
 SHELL         := /usr/bin/env bash
 .SHELLFLAGS   := -eu -o pipefail -c
@@ -68,11 +69,11 @@ bench: ## Run a benchmark (like 'make bench BENCHMARK=b1_btree_map' or 'make run
 	   for ex in $(BENCHMARKS); do \
 		  echo ""; \
 		  echo "--> Running '$$ex'"; \
-		  $(ZIG) build bench-$$ex $(BUILD_OPTS); \
+		  $(ZIG) build bench-$$ex $(BUILD_OPTS) -- $(BENCH_ARGS); \
 	   done; \
 	else \
 	   echo "--> Running benchmark: $(BENCHMARK)"; \
-	   $(ZIG) build bench-$(BENCHMARK) $(BUILD_OPTS); \
+	   $(ZIG) build bench-$(BENCHMARK) $(BUILD_OPTS) -- $(BENCH_ARGS); \
 	fi
 
 test: ## Run tests
@@ -89,7 +90,7 @@ clean: ## Remove docs, build artifacts, and cache directories
 
 lint: ## Check code style and formatting of Zig files
 	@echo "Running code style checks..."
-	@$(ZIG) fmt --check $(SRC_DIR) $(EXAMPLES_DIR)
+	@$(ZIG) fmt --check $(SRC_DIR) $(EXAMPLES_DIR) $(BENCHMARKS_DIR) build.zig
 
 format: ## Format Zig files
 	@echo "Formatting Zig files..."

@@ -10,7 +10,8 @@
 | 4 | [b4_skip_list_map.zig](b4_skip_list_map.zig)           | Benchmarks for Skip list map implementation      |
 | 5 | [b5_trie_map.zig](b5_trie_map.zig)                     | Benchmarks for Trie map implementation           |
 | 6 | [b6_cartesian_tree_map.zig](b6_cartesian_tree_map.zig) | Benchmarks for Cartesian tree map implementation |
-| 7 | [b7_std_comparison.zig](b7_std_comparison.zig)       | Integer maps compared with Zig standard-library containers |
+| 7 | [b7_std_comparison.zig](b7_std_comparison.zig)       | Timing comparisons with Zig standard-library containers |
+| 8 | [b8_memory_comparison.zig](b8_memory_comparison.zig) | Memory comparisons with Zig standard-library containers |
 
 #### Running Benchmarks
 
@@ -39,44 +40,90 @@ zig build bench-b1_btree_map
 >
 > **Compilation**: benchmarks are compiled with `ReleaseFast` optimization (see [build.zig](../build.zig)).
 
-#### Standard-Library Comparison
+#### Standard-Library Comparisons
+
+The timing and memory runners compare `BTreeMap` (branching factor 16), `CartesianTreeMap`, and `SkipListMap`
+(maximum level 16) with Zig's `std.Treap` and hash maps. Integer keys use `std.AutoHashMap`; string keys use
+`std.StringHashMap`. Hash maps have unordered iteration and serve as baselines for workloads that do not require
+ordering. The intrusive `std.Treap` uses a local adapter that allocates a node and stores a value for each key.
+Allocation and freeing are included in insertion and removal timings.
 
 ```sh
+# The complete default workloads, including batches of tiny maps.
 make bench BENCHMARK=b7_std_comparison
+make bench BENCHMARK=b8_memory_comparison
+
+# A short validation run of every key and value combination.
+make bench BENCHMARK=b7_std_comparison BENCH_ARGS=--quick
+make bench BENCHMARK=b8_memory_comparison BENCH_ARGS=--quick
+
+# Separate runs with 1M and 10M integer entries.
+make bench BENCHMARK=b7_std_comparison BENCH_ARGS=--large
+make bench BENCHMARK=b8_memory_comparison BENCH_ARGS=--large
+
+# Equivalent direct Zig invocation.
+zig build bench-b7_std_comparison -- --large
 ```
 
-This benchmark compares `BTreeMap` (branching factor 16), `CartesianTreeMap`, and `SkipListMap` (maximum level 16)
-with `std.Treap` and `std.AutoHashMap`. The hash map does not provide sorted iteration, so its results are a baseline
-for workloads that do not need ordering. The intrusive `std.Treap` has a local adapter that allocates a node and
-stores a value for each key, including allocation and freeing in the measured insertion and removal times.
+##### Workloads
 
-All containers use `u32` keys and values, `std.heap.smp_allocator`, and ReleaseFast optimization for both the runner
-and the imported library. Each case reports the median of five runs after one warmup, at 1,000, 10,000, and 100,000
-elements. Keys are unique integers from zero to the size minus one. Insertion, lookup, and removal use either
-ascending keys or the same shuffled permutation, generated with a fixed seed. Container priorities and skip-list
-levels use their normal initialization and can differ between runs.
+| Mode | Entries per Map | Keys | Values | Tiny Maps |
+|------|-----------------|------|--------|-----------|
+| Default | 1,000, 10,000, and 100,000 | `u64`, 16-byte strings, and 100-byte strings | `u64` and 32-byte records | 10,000 maps each of 4 and 32 entries |
+| `--quick` | 1,000 | Same as default | Same as default | 128 maps each of 4 and 32 entries |
+| `--large` | 1,000,000 and 10,000,000 | `u64` | `u64` | None |
 
-Successful lookups and iteration consume the stored values and check their sums after timing. Unsuccessful lookups
-use keys above the maximum stored key, which favors trees that quickly reject that range. Removal counts and final
-container sizes are also checked. Duplicate updates, missing removals, empty iteration, and cleanup are checked with
-the debug allocator before timing. Iteration includes iterator creation and cleanup; container initialization and
-final cleanup are excluded from the operation timings. CSV rows are written to standard error.
+All containers use `std.heap.smp_allocator` and ReleaseFast optimization for both the runner and imported library.
+The large mode runs separately so routine benchmarks do not construct 10M-entry maps. String and larger-value
+cases remain in the default workload. Tiny maps use 16-byte string keys and 32-byte records.
 
-##### Sample Results
+Present integer keys are even numbers, and absent keys are odd numbers interleaved among them; the final absent
+key is just above the maximum present key. String keys encode those same numbers as fixed-width hexadecimal text.
+The 100-byte case pads that text with a shared prefix, exercising comparisons of long common prefixes. These are
+synthetic keys, rather than samples from real applications.
 
-The following results were measured on Linux x86_64 with an AMD Ryzen 9 9950X and Zig 0.17.0 on October 25, 2026,
-using the native target. Values are nanoseconds per operation for 100,000 shuffled keys, except iteration, which is
-nanoseconds per item.
+Each single-map workload runs with ascending and shuffled insertion orders. Lookup and removal each use a separate
+permutation generated with a different fixed seed, regardless of insertion order. Every container receives the
+same workload. Container priorities and skip-list levels use normal initialization and may vary between runs.
+Key buffers and operation permutations are generated before measurement and kept alive until all containers finish.
+Strings are borrowed from shared buffers; key allocation and copying are excluded.
 
-| Container | Insert | Lookup Hit | Lookup Miss | Iteration | Remove |
-|-----------|-------:|-----------:|------------:|----------:|-------:|
-| `BTreeMap` | 66.63 | 105.15 | 29.90 | 2.11 | 108.39 |
-| `CartesianTreeMap` | 191.65 | 122.15 | 7.08 | 8.11 | 123.50 |
-| `SkipListMap` | 172.16 | 177.46 | 10.74 | 16.48 | 168.18 |
-| `std.Treap` | 117.01 | 80.66 | 12.44 | 14.25 | 99.12 |
-| `std.AutoHashMap` (unordered) | 20.28 | 8.06 | 13.56 | 2.01 | 6.86 |
+##### Timing Measurements
 
-These are local measurements, with no CPU pinning or frequency control. The phases run consecutively on the same
-container, so lookup and iteration measure a populated container with recently accessed data. This suite does not
-measure memory usage, string keys, interleaved mutations, or prefix and range queries. It adds no external
-dependencies; C and third-party Zig libraries are not included.
+The timing runner measures insertion, successful lookup, unsuccessful lookup, full iteration, and removal. Lookups
+use `getPtr` consistently, and successful lookups and iteration consume every word of the stored value. Result sums,
+hit counts, removal counts, and container sizes are checked outside timed regions. Each phase runs once per map;
+lookup, iteration, and removal follow insertion on the same populated container. Iterator creation and cleanup are
+included in iteration time. Container initialization and final cleanup are excluded for single-map workloads.
+
+Tiny-map workloads measure construction and destruction in nanoseconds per map, and iteration in nanoseconds per
+item, while all maps coexist. Construction includes the map array allocation, initialization, and insertion;
+destruction includes freeing all containers and the array. Maps share the same key buffers and insertion order.
+
+Default and large timing runs report the median of five samples after one warmup. Quick runs use one sample after
+one warmup and are intended for validation. CSV output goes to standard error, preceded by a metadata line. Tiny
+results form a second section with their own header and timing columns.
+
+##### Memory Measurements
+
+The memory runner performs no timing. A counting allocator wraps `smp_allocator` during construction and records
+live requested bytes after construction, peak requested bytes during construction, and live bytes per entry.
+It includes each container's inline storage by allocating an array of containers, including for a single map.
+Each workload is built once, and every measured allocation must be released after destruction.
+
+Shared string buffers, operation permutations, allocator metadata, size-class rounding, reserved pages, and process
+RSS are excluded. The string payload cost is shared equally by all containers, so string length alone does not
+change reported container memory. Peak bytes describe allocations visible through Zig's allocator interface, not
+internal temporary allocations made by the underlying allocator. Memory instrumentation is never used by the timing
+runner. Repeated runs may differ for randomized containers.
+
+##### Validation and Limits
+
+`make test` includes benchmark tests for adapters, both value sizes, both string lengths, independent permutations,
+interleaved misses, duplicate updates, missing removals, empty iteration, allocator accounting, and cleanup after
+allocation failures. `make lint` includes benchmark sources and `build.zig`.
+
+Measurements are single-threaded, with no CPU pinning or frequency control. This suite does not measure concurrent
+access, interleaved mutations, prefix queries, or range scans. It adds no external dependencies and includes no Rust
+or C libraries. Results from the earlier `u32` comparison are not comparable with these workloads and have been
+removed from this document.
