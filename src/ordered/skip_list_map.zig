@@ -50,6 +50,7 @@ pub fn SkipListMap(
 
             fn init(allocator: std.mem.Allocator, key: K, value: V, level: u8) !*Node {
                 const node = try allocator.create(Node);
+                errdefer allocator.destroy(node);
                 node.key = key;
                 node.value = value;
                 node.forward = try allocator.alloc(?*Node, level + 1);
@@ -82,6 +83,7 @@ pub fn SkipListMap(
         /// Returns `error.OutOfMemory` if allocation fails.
         pub fn init(allocator: std.mem.Allocator) !Self {
             const header = try allocator.create(Node);
+            errdefer allocator.destroy(header);
             header.key = undefined;
             header.value = undefined;
             header.forward = try allocator.alloc(?*Node, MAX_LEVEL);
@@ -564,4 +566,15 @@ test "SkipListMap: minimum max level" {
     try list.put(3, 3);
 
     try std.testing.expectEqual(@as(i32, 2), list.get(2).?.*);
+}
+
+fn allocationFailureCheck(allocator: std.mem.Allocator) !void {
+    var list = try SkipListMap(i32, i32, i32Compare, 16).init(allocator);
+    defer list.deinit();
+    try list.put(1, 10);
+    try list.put(2, 20);
+}
+
+test "SkipListMap: allocation failures release partial nodes" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, allocationFailureCheck, .{});
 }

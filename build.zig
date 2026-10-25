@@ -74,6 +74,20 @@ pub fn build(b: *std.Build) void {
     // --- Benchmarks ---
     const benches_path = "benches";
     if (b.root.openDir(io, benches_path, .{ .iterate = true })) |benches_dir| {
+        const bench_test_module = b.createModule(.{
+            .root_source_file = b.path("benches/util/comparison.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        bench_test_module.addImport("ordered", lib_module);
+        const bench_tests = b.addTest(.{ .root_module = bench_test_module });
+        const run_bench_tests = b.addRunArtifact(bench_tests);
+        test_step.dependOn(&run_bench_tests.step);
+        const bench_lib_module = b.createModule(.{
+            .root_source_file = lib_source,
+            .target = target,
+            .optimize = .ReleaseFast,
+        });
         b.dependOnDirectoryContents(b.path(benches_path));
         var dir = benches_dir;
         defer dir.close(io);
@@ -89,13 +103,14 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = .ReleaseFast, // Use ReleaseFast for benchmarks
             });
-            bench_module.addImport("ordered", lib_module);
+            bench_module.addImport("ordered", bench_lib_module);
             const bench_exe = b.addExecutable(.{
                 .name = bench_name,
                 .root_module = bench_module,
             });
             b.installArtifact(bench_exe);
             const run_bench_cmd = b.addRunArtifact(bench_exe);
+            run_bench_cmd.addPassthruArgs();
             const bench_step_name = b.fmt("bench-{s}", .{bench_name});
             const bench_step_desc = b.fmt("Run the {s} benchmark", .{bench_name});
             const bench_step = b.step(bench_step_name, bench_step_desc);
