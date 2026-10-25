@@ -74,6 +74,11 @@ pub fn build(b: *std.Build) void {
     // --- Benchmarks ---
     const benches_path = "benches";
     if (b.root.openDir(io, benches_path, .{ .iterate = true })) |benches_dir| {
+        const bench_lib_module = b.createModule(.{
+            .root_source_file = lib_source,
+            .target = target,
+            .optimize = .ReleaseFast,
+        });
         b.dependOnDirectoryContents(b.path(benches_path));
         var dir = benches_dir;
         defer dir.close(io);
@@ -89,7 +94,7 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = .ReleaseFast, // Use ReleaseFast for benchmarks
             });
-            bench_module.addImport("ordered", lib_module);
+            bench_module.addImport("ordered", bench_lib_module);
             const bench_exe = b.addExecutable(.{
                 .name = bench_name,
                 .root_module = bench_module,
