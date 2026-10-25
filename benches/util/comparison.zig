@@ -3,7 +3,7 @@ const ordered = @import("ordered");
 const Timer = @import("timer.zig").Timer;
 const CountingAllocator = @import("counting_allocator.zig").CountingAllocator;
 
-const Mode = enum { normal, quick, large };
+const PROBE_LIMIT = 100_000;
 const NAMES = .{ "BTreeMap", "CartesianTreeMap", "SkipListMap", "std.Treap", "std.HashMap (unordered)" };
 
 fn check(ok: bool) !void {
@@ -93,6 +93,7 @@ fn Suite(comptime K: type, comptime V: type) type {
         const Dataset = struct {
             present: []K,
             absent: []K,
+            queries: []K,
             bytes: []u8,
             insertion: []u32,
             lookup: []u32,
@@ -103,18 +104,26 @@ fn Suite(comptime K: type, comptime V: type) type {
                 errdefer allocator.free(present);
                 const absent = try allocator.alloc(K, size);
                 errdefer allocator.free(absent);
-                const bytes = try allocator.alloc(u8, if (K == u64) 0 else size * 2 * key_len);
+                const queries = try allocator.alloc(K, size);
+                errdefer allocator.free(queries);
+                const bytes = try allocator.alloc(u8, if (K == u64) 0 else size * 3 * key_len);
                 errdefer allocator.free(bytes);
                 for (0..size) |i| {
                     if (K == u64) {
                         present[i] = 2 * i;
                         absent[i] = 2 * i + 1;
+                        queries[i] = present[i];
                     } else {
-                        for (0..2) |which| {
-                            const key = bytes[(2 * i + which) * key_len ..][0..key_len];
+                        for (0..3) |which| {
+                            const key = bytes[(3 * i + which) * key_len ..][0..key_len];
                             @memset(key, 'a');
-                            _ = try std.fmt.bufPrint(key[key_len - 16 ..], "{x:0>16}", .{2 * i + which});
-                            if (which == 0) present[i] = key else absent[i] = key;
+                            _ = try std.fmt.bufPrint(key[key_len - 16 ..], "{x:0>16}", .{2 * i + which % 2});
+                            switch (which) {
+                                0 => present[i] = key,
+                                1 => absent[i] = key,
+                                2 => queries[i] = key,
+                                else => unreachable,
+                            }
                         }
                     }
                 }
@@ -131,7 +140,7 @@ fn Suite(comptime K: type, comptime V: type) type {
                 }
                 shuffle(lookup, 0x10_0c);
                 shuffle(removal, 0xde_1e);
-                return .{ .present = present, .absent = absent, .bytes = bytes, .insertion = insertion, .lookup = lookup, .removal = removal };
+                return .{ .present = present, .absent = absent, .queries = queries, .bytes = bytes, .insertion = insertion, .lookup = lookup, .removal = removal };
             }
 
             fn deinit(self: Dataset, allocator: std.mem.Allocator) void {
@@ -139,6 +148,7 @@ fn Suite(comptime K: type, comptime V: type) type {
                 allocator.free(self.lookup);
                 allocator.free(self.insertion);
                 allocator.free(self.bytes);
+                allocator.free(self.queries);
                 allocator.free(self.absent);
                 allocator.free(self.present);
             }
@@ -182,20 +192,23 @@ fn Suite(comptime K: type, comptime V: type) type {
             for (data.insertion) |i| try map.put(data.present[i], value(@as(u64, i) + 1));
             times[0] = timer.read();
             try check(map.count() == data.present.len);
+            const probes = data.lookup[0..@min(data.lookup.len, PROBE_LIMIT)];
+            var expected_hits: u64 = 0;
+            for (probes) |i| expected_hits += fingerprint(value(@as(u64, i) + 1));
             var sum: u64 = 0;
             var hits: usize = 0;
             _ = timer.lap();
-            for (data.lookup) |i| {
-                if (map.getPtr(data.present[i])) |v| {
+            for (probes) |i| {
+                if (map.getPtr(data.queries[i])) |v| {
                     sum += fingerprint(v.*);
                     hits += 1;
                 }
             }
             times[1] = timer.read();
-            try check(hits == data.present.len and sum == expectedSum(data.present.len));
+            try check(hits == probes.len and sum == expected_hits);
             hits = 0;
             _ = timer.lap();
-            for (data.lookup) |i| {
+            for (probes) |i| {
                 if (map.getPtr(data.absent[i]) != null) hits += 1;
             }
             times[2] = timer.read();
@@ -206,11 +219,11 @@ fn Suite(comptime K: type, comptime V: type) type {
             try check(sum == expectedSum(data.present.len));
             var removed: usize = 0;
             _ = timer.lap();
-            for (data.removal) |i| {
-                if (remove(Map, &map, data.present[i])) removed += 1;
+            for (data.removal[0..probes.len]) |i| {
+                if (remove(Map, &map, data.queries[i])) removed += 1;
             }
             times[4] = timer.read();
-            try check(removed == data.present.len and map.count() == 0);
+            try check(removed == probes.len and map.count() == data.present.len - probes.len);
             return times;
         }
 
@@ -258,9 +271,9 @@ fn Suite(comptime K: type, comptime V: type) type {
                 try check(try iterationSum(Map, &map, allocator) == 0);
                 try check(!remove(Map, &map, data.present[0]));
                 try map.put(data.present[0], value(1));
-                try map.put(data.present[0], value(2));
-                try check(map.count() == 1 and fingerprint(map.getPtr(data.present[0]).?.*) == fingerprint(value(2)));
-                try check(remove(Map, &map, data.present[0]) and map.count() == 0);
+                try map.put(data.queries[0], value(2));
+                try check(map.count() == 1 and fingerprint(map.getPtr(data.queries[0]).?.*) == fingerprint(value(2)));
+                try check(remove(Map, &map, data.queries[0]) and map.count() == 0);
                 // Leave a live node to exercise cleanup as well as removal.
                 try map.put(data.present[1], value(3));
                 _ = try measure(Map, allocator, data);
@@ -302,7 +315,9 @@ fn Suite(comptime K: type, comptime V: type) type {
                         }
                         for (&samples, 0..) |*operation, i| {
                             std.mem.sort(u64, operation[0..repeats], {}, std.sort.asc(u64));
-                            const divisor = if (!tiny) size else if (i == 1) size * tiny_count else tiny_count;
+                            const divisor = if (!tiny)
+                                (if (i == 1 or i == 2 or i == 4) @min(size, PROBE_LIMIT) else size)
+                            else if (i == 1) size * tiny_count else tiny_count;
                             const per_op = @as(f64, @floatFromInt(operation[repeats / 2])) / @as(f64, @floatFromInt(divisor));
                             std.debug.print(",{d:.2}", .{per_op});
                         }
@@ -316,35 +331,39 @@ fn Suite(comptime K: type, comptime V: type) type {
 
 pub fn run(init: std.process.Init, comptime memory: bool) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    var mode: Mode = .normal;
-    if (args.len > 2) return error.InvalidArguments;
-    if (args.len == 2) {
-        mode = if (std.mem.eql(u8, args[1], "--quick")) .quick else if (std.mem.eql(u8, args[1], "--large")) .large else {
-            std.debug.print("Usage: {s} [--quick|--large]\n", .{args[0]});
+    var quick = false;
+    var large = false;
+    for (args[1..]) |arg| {
+        if (std.mem.eql(u8, arg, "--quick")) {
+            quick = true;
+        } else if (std.mem.eql(u8, arg, "--large")) {
+            large = true;
+        } else {
+            std.debug.print("Usage: {s} [--quick] [--large]\n", .{args[0]});
             return error.InvalidArguments;
-        };
+        }
     }
     const allocator = std.heap.smp_allocator;
-    const repeats: usize = if (mode == .quick) 1 else 5;
-    const sizes: []const usize = switch (mode) {
-        .normal => &.{ 1_000, 10_000, 100_000 },
-        .quick => &.{1_000},
-        .large => &.{ 1_000_000, 10_000_000 },
-    };
-    std.debug.print("ReleaseFast; smp_allocator; {s}; {d} measured runs after one warmup for timings\n", .{ if (memory) "requested live and peak bytes, excluding shared key buffers" else "median timings", repeats });
+    const repeats: usize = if (quick) 1 else 5;
+    const sizes: []const usize = if (large) &.{ 1_000_000, 10_000_000 } else if (quick) &.{1_000} else &.{ 1_000, 10_000, 100_000 };
+    if (memory) {
+        std.debug.print("ReleaseFast; smp_allocator; requested live and peak bytes; shared key buffers excluded\n", .{});
+    } else {
+        std.debug.print("ReleaseFast; smp_allocator; median timings; samples={d}; warmups=1; query_limit={d}\n", .{ repeats, PROBE_LIMIT });
+    }
     std.debug.print("container,keys,value_bytes,items,input,maps,{s}\n", .{if (memory) "live_bytes,peak_bytes,bytes/item" else "insert_ns/op,hit_ns/op,miss_ns/op,iterate_ns/item,remove_ns/op"});
     for (sizes) |size| {
         try Suite(u64, u64).report(allocator, size, 0, repeats, memory, false, 0);
-        if (mode != .large) {
+        if (!large) {
             try Suite(u64, [4]u64).report(allocator, size, 0, repeats, memory, false, 0);
             inline for (.{ u64, [4]u64 }) |V| {
                 for ([_]usize{ 16, 100 }) |key_len| try Suite([]const u8, V).report(allocator, size, key_len, repeats, memory, false, 0);
             }
         }
     }
-    if (mode != .large) {
+    if (!large) {
         std.debug.print("container,keys,value_bytes,items,input,maps,{s}\n", .{if (memory) "live_bytes,peak_bytes,bytes/item" else "build_ns/map,iterate_ns/item,destroy_ns/map"});
-        for ([_]usize{ 4, 32 }) |size| try Suite([]const u8, [4]u64).report(allocator, size, 16, repeats, memory, true, if (mode == .quick) 128 else 10_000);
+        for ([_]usize{ 4, 32 }) |size| try Suite([]const u8, [4]u64).report(allocator, size, 16, repeats, memory, true, if (quick) 128 else 10_000);
     }
 }
 
@@ -395,6 +414,14 @@ test "dataset and partially built maps release allocations on failure" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, allocationCheck, .{});
 }
 
+test "large workloads check sampled lookups and partial removal" {
+    const S = Suite(u64, u64);
+    const data = try S.Dataset.init(std.testing.allocator, PROBE_LIMIT + 3, 0);
+    defer data.deinit(std.testing.allocator);
+    _ = try S.measure(S.BTree, std.testing.allocator, data);
+    _ = try S.measure(S.HashMap, std.testing.allocator, data);
+}
+
 test "memory workload releases all measured allocations" {
     const S = Suite([]const u8, [4]u64);
     const data = try S.Dataset.init(std.testing.allocator, 32, 16);
@@ -406,5 +433,20 @@ test "memory workload releases all measured allocations" {
         try std.testing.expect(counting.peak_bytes >= counting.live_bytes);
         S.destroyMany(Map, counting.allocator(), maps);
         try std.testing.expectEqual(0, counting.live_bytes);
+    }
+}
+
+test "string probes have equal contents at different addresses and misses sort between present keys" {
+    const S = Suite([]const u8, u64);
+    for ([_]usize{ 16, 100 }) |key_len| {
+        const data = try S.Dataset.init(std.testing.allocator, 17, key_len);
+        defer data.deinit(std.testing.allocator);
+        for (data.present, data.queries, data.absent, 0..) |present, query, absent, i| {
+            try std.testing.expectEqual(key_len, present.len);
+            try std.testing.expect(present.ptr != query.ptr);
+            try std.testing.expectEqualStrings(present, query);
+            try std.testing.expect(std.mem.order(u8, present, absent) == .lt);
+            if (i + 1 < data.present.len) try std.testing.expect(std.mem.order(u8, absent, data.present[i + 1]) == .lt);
+        }
     }
 }

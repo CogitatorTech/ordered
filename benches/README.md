@@ -61,6 +61,9 @@ make bench BENCHMARK=b8_memory_comparison BENCH_ARGS=--quick
 make bench BENCHMARK=b7_std_comparison BENCH_ARGS=--large
 make bench BENCHMARK=b8_memory_comparison BENCH_ARGS=--large
 
+# Every large timing case with one sample after one warmup.
+make bench BENCHMARK=b7_std_comparison BENCH_ARGS='--large --quick'
+
 # Equivalent direct Zig invocation.
 zig build bench-b7_std_comparison -- --large
 ```
@@ -72,6 +75,7 @@ zig build bench-b7_std_comparison -- --large
 | Default | 1,000, 10,000, and 100,000 | `u64`, 16-byte strings, and 100-byte strings | `u64` and 32-byte records | 10,000 maps each of 4 and 32 entries |
 | `--quick` | 1,000 | Same as default | Same as default | 128 maps each of 4 and 32 entries |
 | `--large` | 1,000,000 and 10,000,000 | `u64` | `u64` | None |
+| `--large --quick` | Same as large | `u64` | `u64` | None |
 
 All containers use `std.heap.smp_allocator` and ReleaseFast optimization for both the runner and imported library.
 The large mode runs separately so routine benchmarks do not construct 10M-entry maps. String and larger-value
@@ -86,7 +90,9 @@ Each single-map workload runs with ascending and shuffled insertion orders. Look
 permutation generated with a different fixed seed, regardless of insertion order. Every container receives the
 same workload. Container priorities and skip-list levels use normal initialization and may vary between runs.
 Key buffers and operation permutations are generated before measurement and kept alive until all containers finish.
-Strings are borrowed from shared buffers; key allocation and copying are excluded.
+Strings are borrowed from shared buffers; string payload allocation and copying are excluded.
+Successful lookup and removal use separately stored, byte-identical string keys, so pointer equality cannot bypass
+content comparison.
 
 ##### Timing Measurements
 
@@ -95,13 +101,17 @@ use `getPtr` consistently, and successful lookups and iteration consume every wo
 hit counts, removal counts, and container sizes are checked outside timed regions. Each phase runs once per map;
 lookup, iteration, and removal follow insertion on the same populated container. Iterator creation and cleanup are
 included in iteration time. Container initialization and final cleanup are excluded for single-map workloads.
+Insertion and iteration visit every entry. Lookup and removal each visit at most 100,000 keys from their independent
+permutations. Their timings are divided by the number of sampled keys, and the remaining entries are freed outside
+the removal timer. This keeps large-map queries bounded while preserving the full working set. Default and quick
+workloads visit every key because their maps fit within that limit.
 
 Tiny-map workloads measure construction and destruction in nanoseconds per map, and iteration in nanoseconds per
 item, while all maps coexist. Construction includes the map array allocation, initialization, and insertion;
 destruction includes freeing all containers and the array. Maps share the same key buffers and insertion order.
 
-Default and large timing runs report the median of five samples after one warmup. Quick runs use one sample after
-one warmup and are intended for validation. CSV output goes to standard error, preceded by a metadata line. Tiny
+Default and large timing runs report the median of five samples after one warmup. Adding `--quick`, including with
+`--large`, uses one sample after one warmup for validation. CSV output goes to standard error, preceded by a metadata line. Tiny
 results form a second section with their own header and timing columns.
 
 ##### Memory Measurements
@@ -117,11 +127,27 @@ change reported container memory. Peak bytes describe allocations visible throug
 internal temporary allocations made by the underlying allocator. Memory instrumentation is never used by the timing
 runner. Repeated runs may differ for randomized containers.
 
+##### Sample Results
+
+The following results were measured on Linux x86_64 with an AMD Ryzen 9 9950X and Zig 0.17.0 on October 25, 2026,
+using the native target. Each map held 100,000 shuffled `u64` keys and `u64` values. Timings are nanoseconds per
+operation, except iteration, which is nanoseconds per item. Memory is live requested bytes per item from a separate
+construction run, including inline container storage and excluding shared workload buffers.
+
+| Container | Insert | Lookup Hit | Lookup Miss | Iteration | Remove | Bytes per Item |
+|-----------|-------:|-----------:|------------:|----------:|-------:|---------------:|
+| `BTreeMap` | 86.30 | 123.21 | 134.28 | 2.52 | 130.85 | 36.83 |
+| `CartesianTreeMap` | 222.54 | 141.05 | 154.62 | 9.08 | 159.50 | 40.00 |
+| `SkipListMap` | 195.68 | 202.16 | 197.31 | 18.43 | 194.13 | 47.99 |
+| `std.Treap` | 137.92 | 102.40 | 102.92 | 15.26 | 129.29 | 48.00 |
+| `std.AutoHashMap` (unordered) | 29.11 | 10.61 | 19.91 | 2.43 | 11.60 | 22.28 |
+
 ##### Validation and Limits
 
 `make test` includes benchmark tests for adapters, both value sizes, both string lengths, independent permutations,
 interleaved misses, duplicate updates, missing removals, empty iteration, allocator accounting, and cleanup after
-allocation failures. `make lint` includes benchmark sources and `build.zig`.
+allocation failures. A workload above the query limit checks sampled lookups and partial removal. `make lint`
+includes benchmark sources and `build.zig`.
 
 Measurements are single-threaded, with no CPU pinning or frequency control. This suite does not measure concurrent
 access, interleaved mutations, prefix queries, or range scans. It adds no external dependencies and includes no Rust
