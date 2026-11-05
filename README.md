@@ -176,7 +176,8 @@ Check out the [examples](examples) directory for example usages of Ordered.
 
 ### Benchmarks
 
-Check out the [benchmarks](benches) directory for local benchmarks.
+Check out the [benchmarks](https://cogitatortech.github.io/benchmarks-ordered) directory for benchmark results comparing implementations in
+Ordered with implementations in other languages like C, C++, Rust, and Java.
 
 ---
 
