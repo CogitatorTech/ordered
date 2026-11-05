@@ -14,7 +14,7 @@
 [![Benchmark Results](https://img.shields.io/badge/benchmark%20results-view-507ec6?style=flat&labelColor=282c34&logo=github)](https://cogitatortech.github.io/benchmarks-ordered)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/CogitatorTech/ordered/blob/main/LICENSE)
 
-A sorted collection library for Zig
+A fast sorted collection library for Zig
 
 </div>
 
