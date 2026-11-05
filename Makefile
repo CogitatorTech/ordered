@@ -98,7 +98,7 @@ format: ## Format Zig files
 
 docs: ## Generate API documentation
 	@echo "Generating API documentation..."
-	@$(ZIG) build docs
+	@$(ZIG) build docs --prefix .
 
 serve-docs: ## Serve the generated documentation on a local server
 	@echo "Serving API documentation locally..."
