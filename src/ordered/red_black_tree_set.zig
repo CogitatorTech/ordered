@@ -132,10 +132,20 @@ pub fn RedBlackTreeSet(
         /// ## Errors
         /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, data: T) !void {
-            // Check if key already exists first to avoid unnecessary allocation
-            if (self.getNode(data)) |existing| {
-                existing.data = data;
-                return;
+            var current = self.root;
+            var parent: ?*Node = null;
+            var order: std.math.Order = .eq;
+            while (current) |node| {
+                parent = node;
+                order = compare(data, node.data);
+                switch (order) {
+                    .eq => {
+                        node.data = data;
+                        return;
+                    },
+                    .lt => current = node.left,
+                    .gt => current = node.right,
+                }
             }
 
             const new_node = try self.allocator.create(Node);
@@ -144,7 +154,7 @@ pub fn RedBlackTreeSet(
                 .color = .red, // New nodes are always red
                 .left = null,
                 .right = null,
-                .parent = null,
+                .parent = parent,
             };
 
             if (self.root == null) {
@@ -154,21 +164,7 @@ pub fn RedBlackTreeSet(
                 return;
             }
 
-            // Standard BST insertion
-            var current = self.root;
-            var parent: ?*Node = null;
-
-            while (current != null) {
-                parent = current;
-                if (compare(data, current.?.data) == .lt) {
-                    current = current.?.left;
-                } else {
-                    current = current.?.right;
-                }
-            }
-
-            new_node.parent = parent;
-            if (compare(data, parent.?.data) == .lt) {
+            if (order == .lt) {
                 parent.?.left = new_node;
             } else {
                 parent.?.right = new_node;
@@ -877,4 +873,34 @@ test "regression: RedBlackTreeSet deletion preserves red-black invariants" {
         try expectRbInvariants(&tree);
     }
     try std.testing.expectEqual(@as(usize, 0), tree.count());
+}
+
+test "RedBlackTreeSet: updates do not allocate and failed insertion preserves values" {
+    const Item = struct {
+        key: i32,
+        value: i32,
+
+        fn compare(a: @This(), b: @This()) std.math.Order {
+            return std.math.order(a.key, b.key);
+        }
+    };
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    var tree = RedBlackTreeSet(Item, Item.compare).init(failing.allocator());
+    defer tree.deinit();
+    for (0..64) |key| try tree.put(.{ .key = @intCast(key), .value = 0 });
+    failing.fail_index = failing.alloc_index;
+    for (0..64) |key| try tree.put(.{ .key = @intCast(key), .value = @intCast(key + 1) });
+    try std.testing.expectError(error.OutOfMemory, tree.put(.{ .key = 64, .value = 0 }));
+    try std.testing.expectEqual(@as(usize, 64), tree.count());
+    for (0..32) |key| _ = tree.remove(.{ .key = @intCast(key * 2), .value = 0 });
+    failing.fail_index = std.math.maxInt(usize);
+    var it = try tree.iterator();
+    defer it.deinit();
+    var key: i32 = 1;
+    while (try it.next()) |item| : (key += 2) {
+        try std.testing.expectEqual(key, item.key);
+        try std.testing.expectEqual(key + 1, item.value);
+    }
+    try std.testing.expectEqual(@as(i32, 65), key);
+    try std.testing.expect(try it.next() == null);
 }

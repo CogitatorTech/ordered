@@ -49,18 +49,20 @@ pub fn SkipListMap(
             forward: []?*Node,
 
             fn init(allocator: std.mem.Allocator, key: K, value: V, level: u8) !*Node {
-                const node = try allocator.create(Node);
-                errdefer allocator.destroy(node);
+                const bytes = try allocator.alignedAlloc(u8, .of(Node), @sizeOf(Node) + @sizeOf(?*Node) * (@as(usize, level) + 1));
+                const node: *Node = @ptrCast(bytes.ptr);
                 node.key = key;
                 node.value = value;
-                node.forward = try allocator.alloc(?*Node, level + 1);
+                const forward: [*]?*Node = @ptrCast(@alignCast(bytes.ptr + @sizeOf(Node)));
+                node.forward = forward[0 .. @as(usize, level) + 1];
                 @memset(node.forward, null);
                 return node;
             }
 
             fn deinit(self: *Node, allocator: std.mem.Allocator) void {
-                allocator.free(self.forward);
-                allocator.destroy(self);
+                const size = @sizeOf(Node) + @sizeOf(?*Node) * self.forward.len;
+                const bytes: [*]align(@alignOf(Node)) u8 = @ptrCast(self);
+                allocator.free(bytes[0..size]);
             }
         };
 
@@ -82,12 +84,7 @@ pub fn SkipListMap(
         /// ## Errors
         /// Returns `error.OutOfMemory` if allocation fails.
         pub fn init(allocator: std.mem.Allocator) !Self {
-            const header = try allocator.create(Node);
-            errdefer allocator.destroy(header);
-            header.key = undefined;
-            header.value = undefined;
-            header.forward = try allocator.alloc(?*Node, MAX_LEVEL);
-            @memset(header.forward, null);
+            const header = try Node.init(allocator, undefined, undefined, MAX_LEVEL - 1);
 
             // Seed from a stack-address-derived hash. ASLR makes this differ
             // across process runs, which is enough randomness for skip-list
@@ -108,8 +105,7 @@ pub fn SkipListMap(
 
         pub fn deinit(self: *Self) void {
             self.clear();
-            self.allocator.free(self.header.forward);
-            self.allocator.destroy(self.header);
+            self.header.deinit(self.allocator);
             self.* = undefined;
         }
 
@@ -577,4 +573,25 @@ fn allocationFailureCheck(allocator: std.mem.Allocator) !void {
 
 test "SkipListMap: allocation failures release partial nodes" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, allocationFailureCheck, .{});
+}
+
+test "SkipListMap: one allocation per node with aligned values" {
+    const Value = struct { number: u8 align(64) };
+    inline for (.{ 1, 32 }) |max_level| {
+        var counting = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+        var list = try SkipListMap(i32, Value, i32Compare, max_level).init(counting.allocator());
+        defer list.deinit();
+        try std.testing.expectEqual(@as(usize, 1), counting.allocations);
+        for (0..32) |key| try list.put(@intCast(key), .{ .number = @intCast(key) });
+        try std.testing.expectEqual(@as(usize, 33), counting.allocations);
+        for (0..32) |key| {
+            const value = list.getPtr(@intCast(key)).?;
+            try std.testing.expectEqual(@as(usize, 0), @intFromPtr(value) % 64);
+            try std.testing.expectEqual(@as(u8, @intCast(key)), list.remove(@intCast(key)).?.number);
+        }
+        try std.testing.expectEqual(@as(usize, 32), counting.deallocations);
+        try list.put(1, .{ .number = 1 });
+        list.clear();
+        try std.testing.expectEqual(@as(usize, 33), counting.deallocations);
+    }
 }
