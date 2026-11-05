@@ -118,13 +118,7 @@ pub fn CartesianTreeMap(
         /// ## Errors
         /// Returns `error.OutOfMemory` if node allocation fails.
         pub fn put(self: *Self, key: K, value: V) !void {
-            // A value-only update keeps the existing priority: re-randomising it
-            // on every update would churn the tree structure for no benefit.
-            if (self.findNode(key)) |existing| {
-                existing.value = value;
-                return;
-            }
-            try self.insertNew(key, value, self.prng.random().int(u32));
+            self.root = try self.insertNode(self.root, key, value, null);
         }
 
         /// Inserts a key-value pair with an explicit priority.
@@ -148,93 +142,39 @@ pub fn CartesianTreeMap(
             if (self.contains(key)) {
                 _ = self.remove(key);
             }
-            try self.insertNew(key, value, priority);
+            self.root = try self.insertNode(self.root, key, value, priority);
         }
 
-        /// Inserts a key known not to be present. Callers must ensure the key is
-        /// absent so the insertion never produces a duplicate.
-        fn insertNew(self: *Self, key: K, value: V, priority: u32) !void {
-            const new_node = try self.allocator.create(Node);
-            new_node.* = Node.init(key, value, priority);
-
-            if (self.root == null) {
-                self.root = new_node;
-                self.len += 1;
-                return;
-            }
-
-            self.root = self.insertNode(self.root, new_node);
-        }
-
-        fn findNode(self: *Self, key: K) ?*Node {
-            var current = self.root;
-            while (current) |node| {
-                switch (compare(key, node.key)) {
-                    .eq => return node,
-                    .lt => current = node.left,
-                    .gt => current = node.right,
-                }
-            }
-            return null;
-        }
-
-        fn insertNode(self: *Self, root: ?*Node, new_node: *Node) ?*Node {
-            if (root == null) {
+        fn insertNode(self: *Self, root: ?*Node, key: K, value: V, priority: ?u32) Allocator.Error!*Node {
+            const node = root orelse {
+                const new_node = try self.allocator.create(Node);
+                new_node.* = Node.init(key, value, priority orelse self.prng.random().int(u32));
                 self.len += 1;
                 return new_node;
+            };
+
+            switch (compare(key, node.key)) {
+                .eq => node.value = value,
+                .lt => {
+                    const child = try self.insertNode(node.left, key, value, priority);
+                    node.left = child;
+                    if (child.priority > node.priority) {
+                        node.left = child.right;
+                        child.right = node;
+                        return child;
+                    }
+                },
+                .gt => {
+                    const child = try self.insertNode(node.right, key, value, priority);
+                    node.right = child;
+                    if (child.priority > node.priority) {
+                        node.right = child.left;
+                        child.left = node;
+                        return child;
+                    }
+                },
             }
-
-            const node = root.?;
-            const key_cmp = compare(new_node.key, node.key);
-
-            if (key_cmp == .eq) {
-                // Replace existing value
-                node.value = new_node.value;
-                node.priority = new_node.priority;
-                self.allocator.destroy(new_node);
-                return root;
-            }
-
-            if (new_node.priority > node.priority) {
-                // New node becomes root, split current tree
-                const split_result = self.split(root, new_node.key);
-                new_node.left = split_result.left;
-                new_node.right = split_result.right;
-                self.len += 1;
-                return new_node;
-            }
-
-            if (key_cmp == .lt) {
-                node.left = self.insertNode(node.left, new_node);
-            } else {
-                node.right = self.insertNode(node.right, new_node);
-            }
-
-            return root;
-        }
-
-        const SplitResult = struct {
-            left: ?*Node,
-            right: ?*Node,
-        };
-
-        fn split(self: *Self, root: ?*Node, key: K) SplitResult {
-            if (root == null) {
-                return SplitResult{ .left = null, .right = null };
-            }
-
-            const node = root.?;
-            const key_cmp = compare(key, node.key);
-
-            if (key_cmp == .lt) {
-                const split_result = self.split(node.left, key);
-                node.left = split_result.right;
-                return SplitResult{ .left = split_result.left, .right = node };
-            } else {
-                const split_result = self.split(node.right, key);
-                node.right = split_result.left;
-                return SplitResult{ .left = node, .right = split_result.right };
-            }
+            return node;
         }
 
         /// Retrieves the value associated with the given key.
@@ -762,5 +702,31 @@ test "regression: CartesianTreeMap update with higher priority does not duplicat
     }
     try testing.expectEqual(@as(usize, 1), fives);
     try testing.expectEqual(@as(usize, 2), n);
+    try expectTreapInvariants(tree.root);
+}
+
+test "CartesianTreeMap: updates and failed insertions preserve existing nodes" {
+    var failing = testing.FailingAllocator.init(testing.allocator, .{});
+    var tree = TreapI32.init(failing.allocator());
+    defer tree.deinit();
+    try tree.putWithPriority(10, 100, 100);
+    try tree.putWithPriority(5, 50, 50);
+    try tree.putWithPriority(15, 150, 50);
+    const root = tree.root.?;
+    const left = root.left.?;
+    const right = root.right.?;
+    failing.fail_index = failing.alloc_index;
+    try tree.put(5, 55);
+    try tree.put(15, 155);
+    try testing.expectEqual(@as(i32, 55), left.value);
+    try testing.expectEqual(@as(i32, 155), right.value);
+    try testing.expectError(error.OutOfMemory, tree.put(7, 70));
+    try testing.expectError(error.OutOfMemory, tree.put(17, 170));
+    try testing.expectEqual(@as(usize, 3), tree.count());
+    try testing.expectEqual(root, tree.root.?);
+    try testing.expectEqual(left, root.left.?);
+    try testing.expectEqual(right, root.right.?);
+    try testing.expectEqual(@as(u32, 50), left.priority);
+    try testing.expectEqual(@as(u32, 50), right.priority);
     try expectTreapInvariants(tree.root);
 }

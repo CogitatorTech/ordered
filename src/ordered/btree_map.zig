@@ -149,13 +149,12 @@ pub fn BTreeMap(
         pub fn get(self: *const Self, key: K) ?*const V {
             var current = self.root;
             while (current) |node| {
-                const res = std.sort.binarySearch(K, node.keys[0..node.len], key, compareFn);
-                if (res) |index| return &node.values[index];
+                const index = std.sort.lowerBound(K, node.keys[0..node.len], key, compareFn);
+                if (index < node.len and compare(key, node.keys[index]) == .eq) return &node.values[index];
 
                 if (node.is_leaf) return null;
 
-                const insertion_point = std.sort.lowerBound(K, node.keys[0..node.len], key, compareFn);
-                current = node.children[insertion_point];
+                current = node.children[index];
             }
             return null;
         }
@@ -176,13 +175,12 @@ pub fn BTreeMap(
         pub fn getPtr(self: *Self, key: K) ?*V {
             var current = self.root;
             while (current) |node| {
-                const res = std.sort.binarySearch(K, node.keys[0..node.len], key, compareFn);
-                if (res) |index| return &node.values[index];
+                const index = std.sort.lowerBound(K, node.keys[0..node.len], key, compareFn);
+                if (index < node.len and compare(key, node.keys[index]) == .eq) return &node.values[index];
 
                 if (node.is_leaf) return null;
 
-                const insertion_point = std.sort.lowerBound(K, node.keys[0..node.len], key, compareFn);
-                current = node.children[insertion_point];
+                current = node.children[index];
             }
             return null;
         }
@@ -279,38 +277,22 @@ pub fn BTreeMap(
 
         fn insertNonFull(self: *Self, node: *Node, key: K, value: V) !bool {
             var i = node.len;
+            while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {}
+            if (i > 0 and compare(key, node.keys[i - 1]) == .eq) {
+                node.values[i - 1] = value;
+                return false;
+            }
             if (node.is_leaf) {
-                // Check if key already exists
-                var j: u16 = 0;
-                while (j < node.len) : (j += 1) {
-                    if (compare(key, node.keys[j]) == .eq) {
-                        // Update existing value
-                        node.values[j] = value;
-                        return false; // Not a new insertion
-                    }
-                }
-
-                // Insert new key
-                while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {
-                    node.keys[i] = node.keys[i - 1];
-                    node.values[i] = node.values[i - 1];
+                var j = node.len;
+                while (j > i) : (j -= 1) {
+                    node.keys[j] = node.keys[j - 1];
+                    node.values[j] = node.values[j - 1];
                 }
                 node.keys[i] = key;
                 node.values[i] = value;
                 node.len += 1;
-                return true; // New insertion
+                return true;
             } else {
-                // Check if key exists in current node
-                var j: u16 = 0;
-                while (j < node.len) : (j += 1) {
-                    if (compare(key, node.keys[j]) == .eq) {
-                        // Update existing value
-                        node.values[j] = value;
-                        return false; // Not a new insertion
-                    }
-                }
-
-                while (i > 0 and compare(key, node.keys[i - 1]) == .lt) : (i -= 1) {}
                 if (node.children[i].?.len == BRANCHING_FACTOR - 1) {
                     try self.splitChild(node, i);
                     // The split promotes a median key into this node at index `i`.
@@ -356,11 +338,11 @@ pub fn BTreeMap(
         }
 
         fn deleteFromNode(self: *Self, node: *Node, key: K) ?V {
-            const res = std.sort.binarySearch(K, node.keys[0..node.len], key, compareFn);
+            const position = std.sort.lowerBound(K, node.keys[0..node.len], key, compareFn);
             var val: ?V = null;
 
-            if (res) |index_usize| {
-                const index = @as(u16, @intCast(index_usize));
+            if (position < node.len and compare(key, node.keys[position]) == .eq) {
+                const index: u16 = @intCast(position);
                 val = node.values[index];
                 self.len -= 1;
                 if (node.is_leaf) {
@@ -369,7 +351,7 @@ pub fn BTreeMap(
                     self.removeFromInternal(node, index);
                 }
             } else if (!node.is_leaf) {
-                const insertion_point = std.sort.lowerBound(K, node.keys[0..node.len], key, compareFn);
+                const insertion_point = position;
                 const key_exists_in_child = self.ensureChildHasEnoughKeys(node, @as(u16, @intCast(insertion_point)));
                 if (key_exists_in_child) {
                     return self.deleteFromNode(node, key);
@@ -537,6 +519,8 @@ pub fn BTreeMap(
         pub const Iterator = struct {
             stack: std.ArrayList(StackFrame),
             allocator: std.mem.Allocator,
+            leaf: ?*Node = null,
+            leaf_index: u16 = 0,
 
             const StackFrame = struct {
                 node: *Node,
@@ -549,29 +533,20 @@ pub fn BTreeMap(
             };
 
             fn init(allocator: std.mem.Allocator, root: ?*Node) !Iterator {
-                var stack: std.ArrayList(StackFrame) = .empty;
-                // If any append below fails after the first, the local
-                // `stack` goes out of scope without being moved into the
-                // returned Iterator; its heap buffer would leak without
-                // this errdefer.
-                errdefer stack.deinit(allocator);
+                var it = Iterator{ .stack = .empty, .allocator = allocator };
+                errdefer it.deinit();
+                if (root) |node| try it.pushLeft(node);
+                return it;
+            }
 
-                if (root) |r| {
-                    try stack.append(allocator, StackFrame{ .node = r, .index = 0 });
-                    // Descend to leftmost leaf
-                    var current = r;
-                    while (!current.is_leaf) {
-                        if (current.children[0]) |child| {
-                            try stack.append(allocator, StackFrame{ .node = child, .index = 0 });
-                            current = child;
-                        } else break;
-                    }
+            fn pushLeft(self: *Iterator, root: *Node) !void {
+                var node = root;
+                while (!node.is_leaf) {
+                    try self.stack.append(self.allocator, .{ .node = node, .index = 0 });
+                    node = node.children[0].?;
                 }
-
-                return Iterator{
-                    .stack = stack,
-                    .allocator = allocator,
-                };
+                self.leaf = node;
+                self.leaf_index = 0;
             }
 
             pub fn deinit(self: *Iterator) void {
@@ -579,43 +554,25 @@ pub fn BTreeMap(
             }
 
             pub fn next(self: *Iterator) !?Entry {
-                while (self.stack.items.len > 0) {
-                    var frame = &self.stack.items[self.stack.items.len - 1];
-
-                    if (frame.index < frame.node.len) {
-                        const result = Entry{
-                            .key = frame.node.keys[frame.index],
-                            .value = frame.node.values[frame.index],
-                        };
-
-                        // Move to next position
-                        if (!frame.node.is_leaf) {
-                            // Go to right child of current key
-                            if (frame.node.children[frame.index + 1]) |child| {
-                                frame.index += 1;
-                                try self.stack.append(self.allocator, StackFrame{ .node = child, .index = 0 });
-
-                                // Descend to leftmost leaf
-                                var current = child;
-                                while (!current.is_leaf) {
-                                    if (current.children[0]) |left_child| {
-                                        try self.stack.append(self.allocator, StackFrame{ .node = left_child, .index = 0 });
-                                        current = left_child;
-                                    } else break;
-                                }
-                            } else {
-                                frame.index += 1;
-                            }
-                        } else {
-                            frame.index += 1;
-                        }
-
-                        return result;
-                    } else {
-                        _ = self.stack.pop();
+                if (self.leaf) |leaf| {
+                    if (self.leaf_index < leaf.len) {
+                        const index = self.leaf_index;
+                        self.leaf_index += 1;
+                        return .{ .key = leaf.keys[index], .value = leaf.values[index] };
                     }
+                    self.leaf = null;
                 }
-
+                while (self.stack.items.len > 0) {
+                    const frame = &self.stack.items[self.stack.items.len - 1];
+                    if (frame.index < frame.node.len) {
+                        const node = frame.node;
+                        const index = frame.index;
+                        frame.index += 1;
+                        try self.pushLeft(node.children[index + 1].?);
+                        return .{ .key = node.keys[index], .value = node.values[index] };
+                    }
+                    _ = self.stack.pop();
+                }
                 return null;
             }
         };
@@ -966,4 +923,47 @@ test "regression: BTreeMap put of a split median does not duplicate the key" {
         prev = entry.key;
     }
     try std.testing.expectEqual(@as(usize, 7), n);
+}
+
+test "BTreeMap: search boundaries and leaf iteration after removal" {
+    var map = BTreeMap(i32, i32, i32Compare, 16).init(std.testing.allocator);
+    defer map.deinit();
+    var key: i32 = 510;
+    while (key >= 0) : (key -= 2) try map.put(key, key);
+    key = 0;
+    while (key < 512) : (key += 2) {
+        try std.testing.expectEqual(key, map.get(key).?.*);
+        map.getPtr(key).?.* += 1;
+        try std.testing.expect(map.get(key + 1) == null);
+        try std.testing.expect(map.getPtr(key + 1) == null);
+        try std.testing.expect(map.remove(key + 1) == null);
+    }
+    try std.testing.expect(map.get(-1) == null);
+    try std.testing.expect(map.get(512) == null);
+    key = 0;
+    while (key < 512) : (key += 4) try std.testing.expectEqual(key + 1, map.remove(key).?);
+    var it = try map.iterator();
+    defer it.deinit();
+    key = 2;
+    while (try it.next()) |entry| : (key += 4) {
+        try std.testing.expectEqual(key, entry.key);
+        try std.testing.expectEqual(key + 1, entry.value);
+    }
+    try std.testing.expectEqual(@as(i32, 514), key);
+    try std.testing.expect(try it.next() == null);
+}
+
+fn iteratorAllocationCheck(allocator: std.mem.Allocator) !void {
+    var map = BTreeMap(i32, i32, i32Compare, 4).init(std.testing.allocator);
+    defer map.deinit();
+    for (0..1024) |key| try map.put(@intCast(key), @intCast(key));
+    var it = try @TypeOf(map).Iterator.init(allocator, map.root);
+    defer it.deinit();
+    var count: usize = 0;
+    while (try it.next()) |entry| : (count += 1) try std.testing.expectEqual(@as(i32, @intCast(count)), entry.key);
+    try std.testing.expectEqual(@as(usize, 1024), count);
+}
+
+test "BTreeMap: iterator allocation failures release the stack" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, iteratorAllocationCheck, .{});
 }
