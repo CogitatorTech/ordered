@@ -21,8 +21,8 @@ pub fn build(b: *std.Build) void {
     const docs_step = b.step("docs", "Generate API documentation");
     const install_docs = b.addInstallDirectory(.{
         .source_dir = lib.getEmittedDocs(),
-        .install_dir = .{ .custom = b.root.joinString(b.allocator, "docs/api") catch @panic("OOM") },
-        .install_subdir = "",
+        .install_dir = .prefix,
+        .install_subdir = "docs/api",
     });
     docs_step.dependOn(&install_docs.step);
 

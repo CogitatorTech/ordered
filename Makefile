@@ -1,7 +1,7 @@
 # ################################################################################
 # # Configuration and Variables
 # ################################################################################
-ZIG_LOCAL  := $(HOME)/.local/share/zig/0.17.0/zig
+ZIG_LOCAL  := $(HOME)/.local/share/zig/0.17.1/zig
 ZIG        ?= $(shell test -x $(ZIG_LOCAL) && echo $(ZIG_LOCAL) || which zig)
 BUILD_TYPE    ?= Debug
 BUILD_OPTS      = -Doptimize=$(BUILD_TYPE)
@@ -98,7 +98,7 @@ format: ## Format Zig files
 
 docs: ## Generate API documentation
 	@echo "Generating API documentation..."
-	@$(ZIG) build docs
+	@$(ZIG) build docs --prefix .
 
 serve-docs: ## Serve the generated documentation on a local server
 	@echo "Serving API documentation locally..."
